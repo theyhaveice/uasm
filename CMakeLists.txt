@@ -34,6 +34,9 @@ add_library(uasm SHARED
   src/util/windows/glob.cpp
   src/util/posix/jit_memory.cpp
   src/util/windows/jit_memory.cpp
+  src/vm/syscall.cpp
+  src/vm/posix/syscall.cpp
+  src/vm/windows/syscall.cpp
   src/codegen/codegen.cpp
   src/codegen/host_target.cpp
   src/codegen/arm64/encoder.cpp
@@ -54,6 +57,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 if(Threads_FOUND)
   target_link_libraries(uasm PRIVATE Threads::Threads)
+endif()
+if(WIN32)
+  target_link_libraries(uasm PRIVATE ws2_32)
 endif()
 
 add_executable(uasm_cli src/cli/main.cpp)

@@ -276,6 +276,7 @@ each category is for:
 | VM stack                | `push` `pop` | A separate, call-stack-like region, distinct from the heap. |
 | Extended math           | `sqrt` `cbrt` `floor` `ceil` `round` `trunc` `abs` `min` `max` `pow` `fma` `sin` `cos` `tan` `asin` `acos` `atan` `atan2` `sinh` `cosh` `tanh` `log` `log2` `log10` `exp` `exp2` `hypot` `copysign` `fmod` | Trig/log/exp/rounding beyond basic arithmetic; float-only except `abs`/`min`/`max`. |
 | Bit manipulation        | `popcount` `clz` `ctz` `bswap` `rotl` `rotr` `bitset` `bitclear` `bittest` `parity` `ffs` `bitreverse` | Integer-only bit-level operations. |
+| Syscalls                | `syscall` | Calls one of 60 platform-neutral "universal" OS operations (file I/O, sockets, time, env, ...) — see [`spec/ISA.md` §12](spec/ISA.md#12-syscalls). |
 
 ## Project layout
 
@@ -286,6 +287,9 @@ src/frontend/               lexer + parser: .uasm text -> AST
 src/linker/                 merges N compiled objects into one resolved Program
 src/vm/interpreter.cpp      the bytecode interpreter that runs a Program
 src/vm/jit.cpp              `uasm run -j`: parallel ahead-of-time compile to host native code + execute in memory
+src/vm/syscall.cpp          `syscall` opcode: shared process-args storage, dispatches to a platform backend
+src/vm/posix/syscall.cpp    all 60 universal syscall IDs via real Linux/macOS libc + syscalls
+src/vm/windows/syscall.cpp  all 60 universal syscall IDs via real Win32 APIs
 src/format/                 .uo binary read/write, plus the uasm/json/yaml disassembler
 src/util/glob.cpp           platform-agnostic glob logic (pattern matching, sorting)
 src/util/glob_platform.h    the three functions each platform backend below implements

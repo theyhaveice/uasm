@@ -138,6 +138,7 @@ const char* mnemonic(Opcode::Value op) {
         case Opcode::Parity: return "parity";
         case Opcode::Ffs: return "ffs";
         case Opcode::Bitreverse: return "bitreverse";
+        case Opcode::Syscall: return "syscall";
     }
     return "?";
 }
@@ -213,6 +214,7 @@ bool hasTypeSuffix(Opcode::Value op) {
         case Opcode::Parity:
         case Opcode::Ffs:
         case Opcode::Bitreverse:
+        case Opcode::Syscall:
             return true;
         default:
             return false;

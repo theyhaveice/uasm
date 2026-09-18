@@ -1,5 +1,7 @@
 #include "uasm/interpreter.h"
 
+#include "syscall_platform.h"
+
 #include "uasm/compat.h"
 
 #include <cmath>
@@ -598,6 +600,21 @@ public:
                         Value a = readOperand(frame, instr.operands[0], instr.type);
                         Value idx = readOperand(frame, instr.operands[1], instr.type);
                         frame.reg(instr.dest) = bitIndexOp(instr.opcode, instr.type, a, idx);
+                        break;
+                    }
+                    case Opcode::Syscall: {
+                        int64_t sid = static_cast<int64_t>(readOperand(frame, instr.operands[0], Type::I64).asInt128());
+                        int64_t a0 = instr.operands.size() > 1
+                                         ? static_cast<int64_t>(readOperand(frame, instr.operands[1], Type::I64).asInt128())
+                                         : 0;
+                        int64_t a1 = instr.operands.size() > 2
+                                         ? static_cast<int64_t>(readOperand(frame, instr.operands[2], Type::I64).asInt128())
+                                         : 0;
+                        int64_t a2 = instr.operands.size() > 3
+                                         ? static_cast<int64_t>(readOperand(frame, instr.operands[3], Type::I64).asInt128())
+                                         : 0;
+                        int64_t result = platformSyscall(sid, a0, a1, a2, &memory_[0], memory_.size());
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, result);
                         break;
                     }
                 }

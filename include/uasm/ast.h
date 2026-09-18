@@ -90,7 +90,9 @@ enum Value {
     Bittest,
     Parity,
     Ffs,
-    Bitreverse
+    Bitreverse,
+
+    Syscall
 };
 }
 

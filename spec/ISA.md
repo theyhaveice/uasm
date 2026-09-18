@@ -26,7 +26,8 @@
 8. [`.uo` binary file format](#8-uo-binary-file-format)
 9. [Error handling](#9-error-handling)
 10. [Example programs](#10-example-programs)
-11. [Native code generation and JIT](#11-native-code-generation-uasm-build-and-jit-uasm-run--j)
+11. [Native code generation and JIT](#11-native-code-generation-and-jit)
+12. [Syscalls](#12-syscalls)
 
 ---
 
@@ -561,7 +562,7 @@ positions.
 
 ## 10. Example programs
 
-Four annotated programs exercise the full instruction set breadth
+Five annotated programs exercise the full instruction set breadth
 described above; see [`examples/`](../examples/) for the source:
 
 | File | Demonstrates |
@@ -570,6 +571,7 @@ described above; see [`examples/`](../examples/) for the source:
 | [`control-flow.uasm`](../examples/control-flow.uasm) | `cmp`, conditional branches, the no-fallthrough rule |
 | [`showcase.uasm`](../examples/showcase.uasm) | the VM stack (`push`/`pop`), the flat heap (`load`/`store`), bitwise ops, `convert` vs. `cast` |
 | [`v0.4-features.uasm`](../examples/v0.4-features.uasm) | the heap allocator (`alloc`/`free`), extended math (`sqrt`), bit manipulation (`popcount`) |
+| [`syscall-demo.uasm`](../examples/syscall-demo.uasm) | `syscall` — `getpid`, `cpu_count`, `cpu_arch_id` |
 
 ## 11. Native code generation and JIT
 
@@ -618,6 +620,85 @@ external process is invoked at any point in `uasm build` (including
 decision changes. `uasm run -j` (JIT) is unaffected, since JIT-compiled
 code is mapped directly into the running process's own memory rather than
 exec'd as a separate signed binary.
+
+## 12. Syscalls
+
+`syscall.T dest, id, arg0, arg1, arg2` calls into the host OS: `id` selects
+a **universal syscall ID** (below) — a single ID number that means the
+same thing regardless of which of the three platforms it actually runs
+on — `arg0`–`arg2` are its (up to three) arguments, and the result goes
+into `dest` as type `T`. Pointer-shaped arguments (paths, buffers) are
+`ptr` values addressed into the same flat heap `load`/`store` use.
+
+<div align="center">
+
+| ID | Name | Args | ID | Name | Args |
+|---|------|------|---|------|------|
+| 0 | `exit` | `code` | 30 | `dir_open` | `pathPtr` |
+| 1 | `write` | `fd, ptr, len` | 31 | `dir_read` | `handle, bufPtr, len` |
+| 2 | `read` | `fd, ptr, len` | 32 | `dir_close` | `handle` |
+| 3 | `open` | `pathPtr, flags, mode` | 33 | `file_is_dir` | `pathPtr` |
+| 4 | `close` | `fd` | 34 | `file_mtime` | `pathPtr` |
+| 5 | `seek` | `fd, offset, whence` | 35 | `file_perms_get` | `pathPtr` |
+| 6 | `file_size` | `fd` | 36 | `file_perms_set` | `pathPtr, mode` |
+| 7 | `remove_file` | `pathPtr` | 37 | `copy_file` | `srcPtr, dstPtr` |
+| 8 | `rename_file` | `oldPtr, newPtr` | 38 | `disk_free_space` | `pathPtr` |
+| 9 | `mkdir` | `pathPtr` | 39 | `get_temp_dir` | `bufPtr, len` |
+| 10 | `rmdir` | `pathPtr` | 40 | `get_exe_path` | `bufPtr, len` |
+| 11 | `getcwd` | `bufPtr, len` | 41 | `get_hostname` | `bufPtr, len` |
+| 12 | `chdir` | `pathPtr` | 42 | `env_count` | — |
+| 13 | `file_exists` | `pathPtr` | 43 | `env_get` | `index, bufPtr, len` |
+| 14 | `realpath` | `pathPtr, bufPtr, len` | 44 | `term_columns` | — |
+| 15 | `time_unix_seconds` | — | 45 | `term_rows` | — |
+| 16 | `time_unix_millis` | — | 46 | `file_lock` | `fd` |
+| 17 | `tick_count_ms` | — | 47 | `file_unlock` | `fd` |
+| 18 | `sleep_millis` | `ms` | 48 | `socket_create` | `domain, type` |
+| 19 | `getpid` | — | 49 | `socket_connect` | `sockfd, hostPtr, port` |
+| 20 | `cpu_count` | — | 50 | `socket_bind` | `sockfd, hostPtr, port` |
+| 21 | `page_size` | — | 51 | `socket_listen` | `sockfd, backlog` |
+| 22 | `getenv` | `namePtr, bufPtr, len` | 52 | `socket_accept` | `sockfd` |
+| 23 | `setenv` | `namePtr, valuePtr` | 53 | `socket_send` | `sockfd, ptr, len` |
+| 24 | `argc` | — | 54 | `socket_recv` | `sockfd, ptr, len` |
+| 25 | `argv` | `index, bufPtr, len` | 55 | `socket_close` | `sockfd` |
+| 26 | `random_bytes` | `bufPtr, len` | 56 | `dns_resolve` | `hostPtr, bufPtr, len` |
+| 27 | `isatty` | `fd` | 57 | `mem_page_alloc` | `size` |
+| 28 | `flush` | `fd` | 58 | `mem_page_protect` | `ptr, size, prot` |
+| 29 | `stdin_available` | — | 59 | `cpu_arch_id` | — |
+
+</div>
+
+All 60 IDs are deliberately restricted to operations with a real, sane
+implementation path on **all three** platforms (raw syscalls or libc on
+Linux/macOS, Win32 on Windows) — nothing that only exists on one or two of
+them (process spawn, signals, symlinks, thread/mutex creation) made the
+list, on purpose.
+
+**Where each ID actually runs:**
+
+- **Interpreter (`uasm run`, no `-j`)** — all 60 IDs, on all three
+  platforms, implemented by calling the real host OS APIs directly (this
+  is ordinary C++ code, so there's no "no dynamic linking" constraint
+  here).
+- **JIT (`uasm run -j`) and native `uasm build --macos-arm64`** — only a
+  **subset**, and only via a **raw kernel syscall**, since native code has
+  no libc to call into: `exit`(0), `read`(2), `write`(1), `open`(3),
+  `close`(4), `remove_file`(7), `chdir`(12), `mkdir`(9), `rmdir`(10),
+  `getpid`(19), `mem_page_protect`(58), and `cpu_arch_id`(59, which isn't
+  a real syscall at all — it's a compile-time constant, since the native
+  backend already knows its own target architecture). The syscall `id`
+  operand must be a literal immediate for native codegen (not loaded
+  through a register) — the specific ID has to be known at compile time
+  to pick the right raw syscall number. Any other ID compiles cleanly
+  under the interpreter but is rejected with a clear error under `-j`/
+  `build`, rather than silently doing the wrong thing.
+- **Native `uasm build` for any other target** — rejected entirely, same
+  as every other not-yet-implemented opcode on those targets (see
+  [§11](#11-native-code-generation-and-jit)).
+
+The raw-syscall numbers used for the native subset above are Darwin's
+public BSD syscall numbers, which have been stable across many macOS
+versions — but Apple has never committed to them as a supported ABI, so
+this is explicitly best-effort, same spirit as the rest of native codegen.
 
 <div align="center">
 

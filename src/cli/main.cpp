@@ -317,6 +317,8 @@ int runBuild(const std::vector<std::string>& args) {
 }
 
 int main(int argc, char** argv) {
+    uasm::setProcessArgs(argc, argv);
+
     if (argc < 2) {
         printUsage();
         return 1;

@@ -104,6 +104,8 @@ const MnemonicMap& mnemonics() {
         m["parity"] = Opcode::Parity;
         m["ffs"] = Opcode::Ffs;
         m["bitreverse"] = Opcode::Bitreverse;
+
+        m["syscall"] = Opcode::Syscall;
     }
     return m;
 }
@@ -179,6 +181,7 @@ bool takesTypeSuffix(Opcode::Value op) {
         case Opcode::Parity:
         case Opcode::Ffs:
         case Opcode::Bitreverse:
+        case Opcode::Syscall:
             return true;
         default:
             return false;
@@ -248,6 +251,7 @@ bool hasDestOperand(Opcode::Value op) {
         case Opcode::Parity:
         case Opcode::Ffs:
         case Opcode::Bitreverse:
+        case Opcode::Syscall:
             return true;
         default:
             return false;

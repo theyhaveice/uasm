@@ -1,5 +1,7 @@
 #include "../codegen_internal.h"
 
+#include "uasm/syscall_ids.h"
+
 #include <cstring>
 #include <map>
 
@@ -17,7 +19,7 @@ void emit32(std::vector<uint8_t>& out, uint32_t word) {
 const int kScratch0 = 9;
 const int kScratch1 = 10;
 const int kScratch2 = 11;
-const int kFrameBaseOffset = 16;
+const int kFrameBaseOffset = 0;
 
 void emitLoadImm64(std::vector<uint8_t>& out, int rd, uint64_t imm) {
     emit32(out, 0xD2800000u | (static_cast<uint32_t>(imm & 0xFFFF) << 5) | static_cast<uint32_t>(rd));
@@ -150,6 +152,7 @@ bool isSupportedOpcode(Opcode::Value op) {
         case Opcode::Call:
         case Opcode::Ret:
         case Opcode::RetVoid:
+        case Opcode::Syscall:
             return true;
         default:
             return false;
@@ -157,6 +160,25 @@ bool isSupportedOpcode(Opcode::Value op) {
 }
 
 bool isFloatType(Type::Value t) { return t == Type::F32 || t == Type::F64; }
+
+bool nativeSyscallNumber(int64_t universalId, uint32_t& darwinNumber) {
+    switch (universalId) {
+        case SyscallId::Exit: darwinNumber = 1; return true;
+        case SyscallId::Read: darwinNumber = 3; return true;
+        case SyscallId::Write: darwinNumber = 4; return true;
+        case SyscallId::Open: darwinNumber = 5; return true;
+        case SyscallId::Close: darwinNumber = 6; return true;
+        case SyscallId::RemoveFile: darwinNumber = 10; return true;
+        case SyscallId::Chdir: darwinNumber = 12; return true;
+        case SyscallId::GetPid: darwinNumber = 20; return true;
+        case SyscallId::Mkdir: darwinNumber = 136; return true;
+        case SyscallId::Rmdir: darwinNumber = 137; return true;
+        case SyscallId::MemPageProtect: darwinNumber = 74; return true;
+        default: return false;
+    }
+}
+
+const uint32_t kSvc80 = 0xD4001001u;
 
 struct PendingBranch {
     size_t at;
@@ -173,6 +195,12 @@ bool arm64IsSupported(const Function& fn) {
             const Instruction& instr = block.instructions[i];
             if (!isSupportedOpcode(instr.opcode)) return false;
             if (isFloatType(instr.type)) return false;
+            if (instr.opcode == Opcode::Syscall) {
+                if (instr.operands.empty() || instr.operands[0].kind != Operand::ImmediateInt) return false;
+                int64_t sid = instr.operands[0].immInt;
+                uint32_t unused;
+                if (sid != SyscallId::CpuArchId && !nativeSyscallNumber(sid, unused)) return false;
+            }
         }
     }
     return true;
@@ -286,6 +314,23 @@ CompiledFunction arm64CompileFunction(const Function& fn) {
                 case Opcode::RetVoid: {
                     emitEpilogue(code, frameSize);
                     emitRet(code);
+                    break;
+                }
+                case Opcode::Syscall: {
+                    int64_t sid = instr.operands[0].immInt;
+                    if (sid == SyscallId::CpuArchId) {
+                        emitLoadImm64(code, kScratch0, 3);
+                        emitStrSlot(code, kScratch0, instr.dest);
+                        break;
+                    }
+                    uint32_t darwinNumber = 0;
+                    nativeSyscallNumber(sid, darwinNumber);
+                    for (size_t a = 1; a < instr.operands.size() && a <= 3; ++a) {
+                        emitLoadOperand(code, static_cast<int>(a - 1), instr.operands[a]);
+                    }
+                    emitLoadImm64(code, 16, darwinNumber);
+                    emit32(code, kSvc80);
+                    emitStrSlot(code, 0, instr.dest);
                     break;
                 }
                 default:

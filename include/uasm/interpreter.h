@@ -12,4 +12,6 @@ struct RuntimeError {
 
 Value run(const Program& program, const std::vector<Value>& args = std::vector<Value>());
 
+void setProcessArgs(int argc, char** argv);
+
 }

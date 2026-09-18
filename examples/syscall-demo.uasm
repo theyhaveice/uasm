@@ -1,0 +1,24 @@
+module syscall_demo
+
+export func main() -> i32 {
+entry:
+    mov.i64 r0, 19          ; SyscallId::GetPid
+    syscall.i64 r1, r0
+
+    mov.i64 r2, 59           ; SyscallId::CpuArchId
+    syscall.i64 r3, r2
+
+    mov.i64 r4, 20           ; SyscallId::CpuCount
+    syscall.i64 r5, r4
+
+    mov.i64 r6, 1            ; r6 > 0 if pid looks sane
+    cmp.i64 r1, r6
+    bgt havepid
+    mov.i32 r10, 0
+    jmp done
+havepid:
+    mov.i32 r10, 1
+    jmp done
+done:
+    ret.i32 r10
+}
