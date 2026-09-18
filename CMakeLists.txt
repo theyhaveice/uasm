@@ -14,6 +14,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 include(GNUInstallDirs)
+find_package(Threads)
 if(NOT WIN32)
   set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}")
 endif()
@@ -31,6 +32,13 @@ add_library(uasm SHARED
   src/util/generic/glob.cpp
   src/util/posix/glob.cpp
   src/util/windows/glob.cpp
+  src/util/posix/jit_memory.cpp
+  src/util/windows/jit_memory.cpp
+  src/codegen/codegen.cpp
+  src/codegen/host_target.cpp
+  src/codegen/arm64/encoder.cpp
+  src/codegen/macos/writer.cpp
+  src/vm/jit.cpp
 )
 target_include_directories(uasm PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -43,6 +51,9 @@ else()
 endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(uasm PRIVATE -static-libgcc -static-libstdc++)
+endif()
+if(Threads_FOUND)
+  target_link_libraries(uasm PRIVATE Threads::Threads)
 endif()
 
 add_executable(uasm_cli src/cli/main.cpp)

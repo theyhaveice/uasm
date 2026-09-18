@@ -1,12 +1,19 @@
 #include <algorithm>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <vector>
 
+#ifndef _WIN32
+#include <sys/stat.h>
+#endif
+
+#include "uasm/codegen.h"
 #include "uasm/disassemble.h"
 #include "uasm/glob.h"
 #include "uasm/interpreter.h"
+#include "uasm/jit.h"
 #include "uasm/linker.h"
 #include "uasm/object.h"
 #include "uasm/parser.h"
@@ -17,9 +24,12 @@ namespace {
 void printUsage() {
     std::cerr << "usage:\n"
               << "  uasm compile <files.uasm...> -o <out.uo>\n"
-              << "  uasm run <file.uo> [-- <type>:<value> ...]\n"
+              << "  uasm run <file.uo> [-j|--jit [n]] [-- <type>:<value> ...]\n"
               << "      e.g. uasm run file.uo -- i32:10 i32:32\n"
-              << "  uasm dump [-f|--format uasm|json|yaml] <file.uo>\n";
+              << "      e.g. uasm run file.uo -j 4 -- i32:10 i32:32\n"
+              << "  uasm dump [-f|--format uasm|json|yaml] <file.uo>\n"
+              << "  uasm build <file.uo> --<target> -o <output>\n"
+              << "      targets: --macos-arm64 (others not yet implemented)\n";
 }
 
 std::string readFile(const std::string& path) {
@@ -101,6 +111,8 @@ int runRun(const std::vector<std::string>& args) {
     std::string input;
     std::vector<std::string> argSpecs;
     bool afterSeparator = false;
+    bool jit = false;
+    int jitThreads = 1;
 
     for (size_t i = 0; i < args.size(); ++i) {
         const std::string& arg = args[i];
@@ -108,6 +120,16 @@ int runRun(const std::vector<std::string>& args) {
             afterSeparator = true;
         } else if (afterSeparator) {
             argSpecs.push_back(arg);
+        } else if (!afterSeparator && (arg == "-j" || arg == "--jit")) {
+            jit = true;
+            if (i + 1 < args.size()) {
+                char* end = 0;
+                long n = std::strtol(args[i + 1].c_str(), &end, 10);
+                if (end != args[i + 1].c_str() && *end == '\0' && n > 0) {
+                    jitThreads = static_cast<int>(n);
+                    ++i;
+                }
+            }
         } else if (input.empty()) {
             input = arg;
         } else {
@@ -138,11 +160,14 @@ int runRun(const std::vector<std::string>& args) {
     }
 
     try {
-        uasm::Value result = uasm::run(program, programArgs);
+        uasm::Value result = jit ? uasm::runJit(program, programArgs, jitThreads) : uasm::run(program, programArgs);
         if (result.type == uasm::Type::I32) return result.bits.i32;
         return 0;
     } catch (const uasm::RuntimeError& e) {
         std::cerr << "runtime error: " << e.message << "\n";
+        return 1;
+    } catch (const uasm::CodegenError& e) {
+        std::cerr << "jit error: " << e.what() << "\n";
         return 1;
     }
 }
@@ -191,6 +216,104 @@ int runDump(const std::vector<std::string>& args) {
     return 0;
 }
 
+bool parseTargetFlag(const std::string& flag, uasm::CodegenTarget& target) {
+    if (flag == "--macos-arm64") {
+        target = uasm::CodegenTarget(uasm::TargetArch::Arm64, uasm::TargetOs::MacOS);
+        return true;
+    }
+    if (flag == "--macos-x86_64") { target = uasm::CodegenTarget(uasm::TargetArch::X86_64, uasm::TargetOs::MacOS); return true; }
+    if (flag == "--windows-x86") { target = uasm::CodegenTarget(uasm::TargetArch::X86, uasm::TargetOs::Windows); return true; }
+    if (flag == "--windows-x86_64") { target = uasm::CodegenTarget(uasm::TargetArch::X86_64, uasm::TargetOs::Windows); return true; }
+    if (flag == "--windows-arm32") { target = uasm::CodegenTarget(uasm::TargetArch::Arm32, uasm::TargetOs::Windows); return true; }
+    if (flag == "--windows-arm64") { target = uasm::CodegenTarget(uasm::TargetArch::Arm64, uasm::TargetOs::Windows); return true; }
+    if (flag == "--linux-x86") { target = uasm::CodegenTarget(uasm::TargetArch::X86, uasm::TargetOs::Linux); return true; }
+    if (flag == "--linux-x86_64") { target = uasm::CodegenTarget(uasm::TargetArch::X86_64, uasm::TargetOs::Linux); return true; }
+    if (flag == "--linux-arm32") { target = uasm::CodegenTarget(uasm::TargetArch::Arm32, uasm::TargetOs::Linux); return true; }
+    if (flag == "--linux-arm64") { target = uasm::CodegenTarget(uasm::TargetArch::Arm64, uasm::TargetOs::Linux); return true; }
+    return false;
+}
+
+int runBuild(const std::vector<std::string>& args) {
+    std::string input;
+    std::string output;
+    bool haveTarget = false;
+    uasm::CodegenTarget target;
+
+    for (size_t i = 0; i < args.size(); ++i) {
+        if (args[i] == "-o") {
+            if (i + 1 >= args.size()) {
+                std::cerr << "error: -o requires an argument\n";
+                return 1;
+            }
+            output = args[++i];
+        } else if (args[i].size() > 2 && args[i][0] == '-' && args[i][1] == '-') {
+            if (haveTarget) {
+                std::cerr << "error: only one target flag may be given\n";
+                return 1;
+            }
+            if (!parseTargetFlag(args[i], target)) {
+                std::cerr << "error: unknown target '" << args[i] << "'\n";
+                return 1;
+            }
+            haveTarget = true;
+        } else if (input.empty()) {
+            input = args[i];
+        } else {
+            printUsage();
+            return 1;
+        }
+    }
+
+    if (input.empty() || output.empty() || !haveTarget) {
+        printUsage();
+        return 1;
+    }
+
+    if (!uasm::isCodegenSupported(target)) {
+        std::cerr << "error: no native codegen backend for target '" << uasm::targetName(target)
+                   << "' yet (v0.4 only supports macos-arm64)\n";
+        return 1;
+    }
+
+    uasm::Program program;
+    try {
+        program = uasm::readUo(input);
+    } catch (const uasm::SerializeError& e) {
+        std::cerr << "error: " << e.message << "\n";
+        return 1;
+    }
+
+    try {
+        uasm::CompiledCode code = uasm::compileProgram(program, target);
+        std::vector<uint8_t> exe = uasm::wrapExecutable(target, code);
+
+        std::ofstream out(output.c_str(), std::ios::binary);
+        if (!out) {
+            std::cerr << "error: could not open '" << output << "' for writing\n";
+            return 1;
+        }
+        out.write(reinterpret_cast<const char*>(&exe[0]), static_cast<std::streamsize>(exe.size()));
+        out.close();
+
+#ifndef _WIN32
+        if (uasm::executableNeedsExecBit(target.os)) {
+            ::chmod(output.c_str(), 0755);
+        }
+#endif
+    } catch (const uasm::CodegenError& e) {
+        std::cerr << "build error: " << e.what() << "\n";
+        return 1;
+    }
+
+    std::cout << "built " << uasm::targetName(target) << " executable -> " << output << "\n";
+    if (target.os == uasm::TargetOs::MacOS && target.arch == uasm::TargetArch::Arm64) {
+        std::cerr << "note: unsigned arm64 macOS binaries generally will not run on Apple Silicon\n"
+                   << "hardware without at least an ad-hoc code signature; this build does not\n"
+                   << "sign the output (see spec/ISA.md).\n";
+    }
+    return 0;
+}
+
 }
 
 int main(int argc, char** argv) {
@@ -205,6 +328,7 @@ int main(int argc, char** argv) {
     if (command == "compile") return runCompile(rest);
     if (command == "run") return runRun(rest);
     if (command == "dump") return runDump(rest);
+    if (command == "build") return runBuild(rest);
 
     std::cerr << "error: unknown command '" << command << "'\n";
     printUsage();

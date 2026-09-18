@@ -202,16 +202,27 @@ order, and error out if a pattern matches nothing. Quote glob patterns so
 your shell doesn't expand them first if you specifically want `**`
 recursion (most shells don't understand `**` on their own).
 
-### `uasm run <file.uo> [-- <type>:<value> ...]`
+### `uasm run <file.uo> [-j|--jit [n]] [-- <type>:<value> ...]`
 
-Loads a `.uo` file and interprets it, starting at its entry function.
-Arguments after `--` are positional, each written as `type:value`:
+Loads a `.uo` file and runs it, starting at its entry function. Arguments
+after `--` are positional, each written as `type:value`:
 
 ```bash
 uasm run out.uo                          # no-argument entry function
 uasm run out.uo -- i32:10 i32:32         # two i32 arguments
 uasm run out.uo -- f64:3.14 ptr:0        # mixed types
+uasm run out.uo -j -- i32:10 i32:32      # JIT-compiled, 1 thread
+uasm run out.uo -j 4 -- i32:10 i32:32    # JIT-compiled, 4 threads
 ```
+
+Without `-j`/`--jit`, this uses the bytecode interpreter (unchanged
+behavior). With it, the program is compiled ahead-of-time to native code
+for the *host* machine — across `n` worker threads if given, `1` if not —
+then executed directly in memory; there's no interpreter fallback and no
+profiling/tiered recompilation. As of v0.4 this only works when the host
+is `macos-arm64` and the program uses only the instruction subset the
+native backend supports (see [`spec/ISA.md` §11](spec/ISA.md#11-native-code-generation-and-jit))
+— anything else reports a clear error rather than silently falling back.
 
 The process exit code is the entry function's return value truncated to
 an `i32` (matching typical POSIX exit-code conventions); non-`i32` return
@@ -224,6 +235,28 @@ Renders a `.uo` file back to readable text, without needing the original
 per-function `module` names, and every instruction. Defaults to `uasm`
 (reconstructed uasm-like source); `json` and `yaml` give a fully
 structured view, useful for tooling.
+
+### `uasm build <file.uo> --<target> -o <output>`
+
+Compiles a `.uo` file ahead-of-time into a standalone native executable —
+no `libuasm`, no libc, no dynamic linker at runtime. As of v0.4, only
+`--macos-arm64` is implemented; the other nine `{arch}-{os}` target flags
+(`--macos-x86_64`, `--windows-x86`, `--windows-x86_64`, `--windows-arm32`,
+`--windows-arm64`, `--linux-x86`, `--linux-x86_64`, `--linux-arm32`,
+`--linux-arm64`) parse but report "no native codegen backend ... yet"
+rather than silently producing something broken.
+
+```bash
+uasm build out.uo --macos-arm64 -o out_native
+```
+
+Only a subset of the instruction set is supported by the native backend
+(integer `mov`/`add`/`sub`/`mul`/`div`/`cmp`/branches/`call`/`ret`) — see
+[`spec/ISA.md` §11](spec/ISA.md#11-native-code-generation-and-jit), which
+also covers a known limitation: unsigned `macos-arm64` output currently
+can't execute on real Apple Silicon hardware (the kernel requires at least
+an ad-hoc code signature, and `uasm build` deliberately never shells out to
+`codesign` or any other external tool).
 
 ## Instruction set
 
@@ -251,16 +284,22 @@ include/uasm/               public library headers — the embeddable API surfac
 src/core/                   Type/Value fundamentals shared by every other stage
 src/frontend/               lexer + parser: .uasm text -> AST
 src/linker/                 merges N compiled objects into one resolved Program
-src/vm/                     the bytecode interpreter that runs a Program
+src/vm/interpreter.cpp      the bytecode interpreter that runs a Program
+src/vm/jit.cpp              `uasm run -j`: parallel ahead-of-time compile to host native code + execute in memory
 src/format/                 .uo binary read/write, plus the uasm/json/yaml disassembler
 src/util/glob.cpp           platform-agnostic glob logic (pattern matching, sorting)
 src/util/glob_platform.h    the three functions each platform backend below implements
 src/util/generic/glob.cpp   backend for C++17+ (std::filesystem, any OS)
 src/util/posix/glob.cpp     backend for macOS/Linux/MinGW pre-C++17 (dirent.h)
 src/util/windows/glob.cpp   backend for MSVC pre-C++17 (WinAPI FindFirstFile)
+src/util/posix/jit_memory.cpp    mmap/mprotect-backed executable memory for JIT
+src/util/windows/jit_memory.cpp  VirtualAlloc/VirtualProtect-backed equivalent
+src/codegen/codegen.cpp     `uasm build`: target-agnostic driver (register slots, branch/call fixups, linking)
+src/codegen/arm64/          AArch64 instruction encoder (only arch implemented as of v0.4)
+src/codegen/macos/          minimal Mach-O executable writer (only OS implemented as of v0.4)
 src/cli/                    the `uasm` command-line tool, built on top of libuasm
 spec/ISA.md                 the language / ISA / file-format specification
-examples/                   three annotated sample .uasm programs
+examples/                   four annotated sample .uasm programs
 ```
 
 Only one of the three platform backends above actually contributes code

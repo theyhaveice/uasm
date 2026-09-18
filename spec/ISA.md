@@ -26,6 +26,7 @@
 8. [`.uo` binary file format](#8-uo-binary-file-format)
 9. [Error handling](#9-error-handling)
 10. [Example programs](#10-example-programs)
+11. [Native code generation and JIT](#11-native-code-generation-uasm-build-and-jit-uasm-run--j)
 
 ---
 
@@ -560,7 +561,7 @@ positions.
 
 ## 10. Example programs
 
-Three annotated programs exercise the full instruction set breadth
+Four annotated programs exercise the full instruction set breadth
 described above; see [`examples/`](../examples/) for the source:
 
 | File | Demonstrates |
@@ -568,6 +569,55 @@ described above; see [`examples/`](../examples/) for the source:
 | [`basics.uasm`](../examples/basics.uasm) | `$param` references, `add`, returning a value |
 | [`control-flow.uasm`](../examples/control-flow.uasm) | `cmp`, conditional branches, the no-fallthrough rule |
 | [`showcase.uasm`](../examples/showcase.uasm) | the VM stack (`push`/`pop`), the flat heap (`load`/`store`), bitwise ops, `convert` vs. `cast` |
+| [`v0.4-features.uasm`](../examples/v0.4-features.uasm) | the heap allocator (`alloc`/`free`), extended math (`sqrt`), bit manipulation (`popcount`) |
+
+## 11. Native code generation and JIT
+
+`uasm build` and `uasm run -j`/`--jit`: two ways to run a `.uo` program
+without the bytecode interpreter.
+
+- **`uasm build <file.uo> --<target> -o <output>`** compiles ahead-of-time to
+  a real, standalone native executable for a chosen `{arch}-{os}` target,
+  with no runtime dependency on `libuasm`, libc, or a dynamic linker — the
+  output is a fully self-contained binary.
+- **`uasm run <file.uo> -j`/`--jit [n]`** compiles the program to native code
+  for the *host* machine, in memory, across `n` worker threads (default `1`
+  if no number follows the flag), then executes it directly — no
+  interpreter fallback, no profiling, no tiered recompilation. Omitting
+  `-j`/`--jit` entirely uses the bytecode interpreter, unchanged.
+
+Both share the same code-generation core, organized the same way as the
+platform-specific pieces described in [`README.md`](../README.md#project-layout):
+one arch-specific instruction encoder per CPU architecture, one OS-specific
+executable-format writer per operating system, composed together for a
+given `{arch}-{os}` target. As of v0.4, exactly one combination is
+implemented — `macos-arm64` — and it supports a strict subset of the
+instruction set: `mov`, `add`/`sub`/`mul`/`div` (signed integers only),
+`cmp` and the six conditional branches, `jmp`, `call`/`ret`. Anything
+outside that subset (float instructions, `load`/`store`, the memory
+allocator, bitwise ops, extended math, bit manipulation) is rejected with a
+clear error rather than silently miscompiled. The other nine `{arch}-{os}`
+combinations parse as valid flags but report "no native codegen backend
+... yet" — they are follow-up work, not silently broken.
+
+Register allocation is deliberately naive: every uASM virtual register gets
+a fixed stack-frame slot; there is no real allocator, no spilling logic
+beyond "everything is already spilled." This is correct, not fast — a real
+register allocator is future work.
+
+**Known limitation — unsigned macOS binaries.** Apple Silicon's kernel
+refuses to execute a Mach-O binary with no code signature at all (not even
+an ad-hoc one). `uasm build --macos-arm64` produces a structurally correct
+executable — verified with `otool -l`/`otool -tv`, which decode the
+generated Mach-O headers and disassemble the generated instructions
+correctly — but running it directly on real Apple Silicon hardware
+currently exits via `SIGKILL` before your program's `main` ever runs. This
+is a deliberate scope decision, not a bug to be quietly patched: no
+external process is invoked at any point in `uasm build` (including
+`codesign`), so this limitation is expected to remain until/unless that
+decision changes. `uasm run -j` (JIT) is unaffected, since JIT-compiled
+code is mapped directly into the running process's own memory rather than
+exec'd as a separate signed binary.
 
 <div align="center">
 
