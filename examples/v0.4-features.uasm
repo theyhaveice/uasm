@@ -1,0 +1,24 @@
+module v04_features
+
+export func main() -> i32 {
+entry:
+    mov.i32 r0, 32
+    alloc.i32 r1, r0
+    mov.i32 r2, 7
+    store.i32 r1, r2
+    load.i32 r3, r1
+    free.ptr r1
+
+    mov.f64 r4, 2.0
+    sqrt.f64 r5, r4
+    convert.i32 r6, r5
+
+    mov.i32 r7, 240
+    mov.i32 r8, 15
+    or.i32 r9, r7, r8
+    popcount.i32 r10, r9
+
+    add.i32 r11, r3, r6
+    add.i32 r12, r11, r10
+    ret.i32 r12
+}

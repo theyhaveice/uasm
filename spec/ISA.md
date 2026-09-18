@@ -4,7 +4,7 @@
 
 ### Instruction Set & File Format Specification
 
-[![Version](https://img.shields.io/badge/version-v0.3-orange.svg)](../README.md#versioning)
+[![Version](https://img.shields.io/badge/version-v0.4-orange.svg)](../README.md#versioning)
 [![Formats](https://img.shields.io/badge/formats-.uo-064F8C.svg)](#8-uo-binary-file-format)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
 
@@ -19,7 +19,7 @@
 1. [Types](#1-types)
 2. [Register model](#2-register-model)
 3. [Value representation](#3-value-representation)
-4. [Instruction set](#4-instruction-set-v03)
+4. [Instruction set](#4-instruction-set-v04)
 5. [Module / text grammar](#5-module--text-grammar-ebnf)
 6. [Worked example: source to result](#6-worked-example-source-to-result)
 7. [Object / link model](#7-object--link-model)
@@ -60,12 +60,12 @@ type below is fixed-size and known to the interpreter natively.
 
 A type is never declared on its own — it only ever appears as a function
 parameter/return type, or as the `.T` suffix on an instruction (see
-[§4](#4-instruction-set-v03)). There's no separate `typedef`-like
+[§4](#4-instruction-set-v04)). There's no separate `typedef`-like
 mechanism; if you need the same shape twice, write the suffix twice.
 
 `ptr` is deliberately opaque: it's just an address-sized integer with no
 arithmetic type rules of its own beyond what `load`/`store` and `push`/
-`pop` do with it (see [§4](#4-instruction-set-v03)). It exists so that
+`pop` do with it (see [§4](#4-instruction-set-v04)). It exists so that
 "this is an address" is visible in the instruction stream, rather than
 overloading `u64` for two different jobs.
 
@@ -106,7 +106,7 @@ flowchart TB
 Each function call gets its **own** register file — a growable array of
 `Value`, private to that call's frame — plus its own single-slot compare
 flag, set by `cmp` and read by the six conditional branches (see
-[§4](#4-instruction-set-v03)). Registers are never shared across calls:
+[§4](#4-instruction-set-v04)). Registers are never shared across calls:
 a recursive call to the same function gets a brand-new `r0`, `r1`, ...,
 completely independent of the caller's. This is what makes recursion work
 correctly with no extra bookkeeping in user code — there's no way to
@@ -126,14 +126,14 @@ it makes sense for, rather than having a distinct mnemonic per type (no
 `addi32`/`addf64`/`adduq` zoo).
 
 This is also why `mov` and `convert` are different instructions (see
-[§4](#4-instruction-set-v03)): a `Value`'s tag can be *changed* — `mov`
+[§4](#4-instruction-set-v04)): a `Value`'s tag can be *changed* — `mov`
 deliberately does not do so (it copies the source `Value` verbatim,
 carrying its dynamic type along for the ride), while `convert` explicitly
 re-tags and reinterprets it numerically.
 
 ---
 
-## 4. Instruction set (v0.3)
+## 4. Instruction set (v0.4)
 
 All arithmetic/data instructions take a type suffix `.T` where `T` is one of
 the types in [§1](#1-types) (excluding `void`).
@@ -253,13 +253,30 @@ called function reads them back via `$paramName` or the equivalent
 | `store.T rD, rS`      | `*rD := rS` (`rD` holds a `ptr`) |
 
 `load`/`store` address a fixed-size (1 MiB in the reference interpreter) flat
-byte memory shared by the whole run, addressed by byte offset. There is no
-allocator instruction in v0.x — a program constructs an address directly
-(e.g. `mov.ptr rD, 100`) and is responsible for not overlapping live
-values; an out-of-bounds access is a runtime error. An allocator
-(`alloc`/`free` or similar) is a natural v0.x-or-extension candidate — see
-[Versioning](../README.md#versioning) in the README — but isn't part of
-the core yet.
+byte memory shared by the whole run, addressed by byte offset. A program may
+still construct an address directly (e.g. `mov.ptr rD, 100`) — `load`/`store`
+don't require going through the allocator below — but doing so risks
+overlapping a live allocation, since the allocator has no way to know that
+range is "in use."
+
+#### Memory — heap allocator
+
+| Instruction                  | Effect |
+|--------------------------------|--------|
+| `alloc.T dest, size`            | allocates `size` bytes, returns a `ptr` in `dest` |
+| `free.ptr src`                  | releases the allocation at `src` |
+| `realloc.T dest, ptr, size`     | resizes the allocation at `ptr` to `size` bytes, returns the (possibly new) `ptr` in `dest` |
+| `memcpy.T dst, src, len`        | copies `len` bytes from `src` to `dst` (regions must not overlap) |
+| `memmove.T dst, src, len`       | copies `len` bytes from `src` to `dst`, safe if the regions overlap |
+| `memset.T dst, value, len`      | fills `len` bytes at `dst` with the low byte of `value` |
+| `memcmp.T dest, a, b, len`      | compares `len` bytes at `a` and `b`; `dest` gets `<0`/`0`/`>0` like `memcmp(3)` |
+
+`dst`/`src`/`ptr`/`a`/`b` are always `ptr` values; `size`/`len`/`value` are
+read as type `T`. The allocator is a first-fit free-list carved out of the
+same flat heap `load`/`store` address — deliberately simple (correct, not
+fast, no coalescing of adjacent freed blocks); a real allocator design is
+future work, not a v0.4 concern. `free`/`realloc`/the `mem*` family on an
+address the allocator didn't hand out (or already freed) is a runtime error.
 
 #### Memory — VM stack
 
@@ -276,6 +293,57 @@ region exists specifically so a program has *somewhere* to spill a value
 temporarily without needing a heap address — it is not used implicitly by
 `call`/`ret` (arguments and return values travel through registers, not
 this stack).
+
+#### Extended math
+
+All of these are float-only (`f32`/`f64`) except `abs`, `min`, and `max`,
+which also work on integer types — using any other instruction here with an
+integer type suffix is a runtime error.
+
+| Instruction                     | Effect |
+|-----------------------------------|--------|
+| `sqrt.T dest, a`                   | `dest := sqrt(a)` |
+| `cbrt.T dest, a`                   | `dest := cbrt(a)` |
+| `floor.T dest, a` / `ceil.T dest, a` / `round.T dest, a` / `trunc.T dest, a` | standard rounding modes |
+| `abs.T dest, a`                    | `dest := \|a\|` (int or float) |
+| `min.T dest, a, b` / `max.T dest, a, b` | `dest := min/max(a, b)` (int or float) |
+| `pow.T dest, a, b`                 | `dest := a ** b` |
+| `fma.T dest, a, b, c`              | `dest := a * b + c`, computed in one step |
+| `sin`/`cos`/`tan`/`asin`/`acos`/`atan`/`sinh`/`cosh`/`tanh`.T dest, a | standard trig/hyperbolic functions |
+| `atan2.T dest, y, x`                | two-argument arctangent |
+| `log.T dest, a` / `log2.T dest, a` / `log10.T dest, a` | natural/base-2/base-10 logarithm |
+| `exp.T dest, a` / `exp2.T dest, a` | `e^a` / `2^a` |
+| `hypot.T dest, a, b`                | `sqrt(a*a + b*b)`, without intermediate overflow |
+| `copysign.T dest, a, b`             | magnitude of `a`, sign of `b` |
+| `fmod.T dest, a, b`                 | floating-point remainder of `a / b` |
+
+The interpreter implements these with the host's own `<cmath>` (full
+precision, matching whatever the host's C library provides). A future native
+code-generation backend that can't call into libm may need its own
+approximations here — see the README's Versioning section for how such
+backend-specific tradeoffs get tracked.
+
+#### Bit manipulation
+
+Integer-only — using any of these with a float type suffix is a runtime
+error, mirroring `and`/`or`/`xor`/`not`/`shl`/`shr`.
+
+| Instruction                  | Effect |
+|---------------------------------|--------|
+| `popcount.T dest, a`             | number of set bits in `a` |
+| `clz.T dest, a` / `ctz.T dest, a` | count of leading/trailing zero bits, within `T`'s width |
+| `bswap.T dest, a`                | reverses the byte order of `a` |
+| `rotl.T dest, a, n` / `rotr.T dest, a, n` | rotates `a` left/right by `n` bits (`n` must be `[0, bit-width)`) |
+| `bitset.T dest, a, n`            | `dest := a` with bit `n` set |
+| `bitclear.T dest, a, n`          | `dest := a` with bit `n` cleared |
+| `bittest.T dest, a, n`           | `dest := 1` if bit `n` of `a` is set, else `0` |
+| `parity.T dest, a`               | `1` if `a` has an odd number of set bits, else `0` |
+| `ffs.T dest, a`                  | 1-based index of the lowest set bit in `a`, or `0` if `a` is zero |
+| `bitreverse.T dest, a`           | reverses the bit order of `a` within `T`'s width |
+
+All of these operate on exactly `T`'s bit width (via `sizeOfType`), not on
+the wider internal representation used for arithmetic — e.g. `popcount.i8`
+only ever looks at 8 bits, even though a `Value` can hold up to 128.
 
 ---
 

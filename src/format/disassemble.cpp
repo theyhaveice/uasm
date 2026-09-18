@@ -90,6 +90,54 @@ const char* mnemonic(Opcode::Value op) {
         case Opcode::Pop: return "pop";
         case Opcode::Convert: return "convert";
         case Opcode::Cast: return "cast";
+        case Opcode::Alloc: return "alloc";
+        case Opcode::Free: return "free";
+        case Opcode::Realloc: return "realloc";
+        case Opcode::MemCpy: return "memcpy";
+        case Opcode::MemSet: return "memset";
+        case Opcode::MemMove: return "memmove";
+        case Opcode::MemCmp: return "memcmp";
+        case Opcode::Sqrt: return "sqrt";
+        case Opcode::Cbrt: return "cbrt";
+        case Opcode::Floor: return "floor";
+        case Opcode::Ceil: return "ceil";
+        case Opcode::Round: return "round";
+        case Opcode::Trunc: return "trunc";
+        case Opcode::Abs: return "abs";
+        case Opcode::Min: return "min";
+        case Opcode::Max: return "max";
+        case Opcode::Pow: return "pow";
+        case Opcode::Fma: return "fma";
+        case Opcode::Sin: return "sin";
+        case Opcode::Cos: return "cos";
+        case Opcode::Tan: return "tan";
+        case Opcode::Asin: return "asin";
+        case Opcode::Acos: return "acos";
+        case Opcode::Atan: return "atan";
+        case Opcode::Atan2: return "atan2";
+        case Opcode::Sinh: return "sinh";
+        case Opcode::Cosh: return "cosh";
+        case Opcode::Tanh: return "tanh";
+        case Opcode::Log: return "log";
+        case Opcode::Log2: return "log2";
+        case Opcode::Log10: return "log10";
+        case Opcode::Exp: return "exp";
+        case Opcode::Exp2: return "exp2";
+        case Opcode::Hypot: return "hypot";
+        case Opcode::Copysign: return "copysign";
+        case Opcode::Fmod: return "fmod";
+        case Opcode::Popcount: return "popcount";
+        case Opcode::Clz: return "clz";
+        case Opcode::Ctz: return "ctz";
+        case Opcode::Bswap: return "bswap";
+        case Opcode::Rotl: return "rotl";
+        case Opcode::Rotr: return "rotr";
+        case Opcode::Bitset: return "bitset";
+        case Opcode::Bitclear: return "bitclear";
+        case Opcode::Bittest: return "bittest";
+        case Opcode::Parity: return "parity";
+        case Opcode::Ffs: return "ffs";
+        case Opcode::Bitreverse: return "bitreverse";
     }
     return "?";
 }
@@ -117,6 +165,54 @@ bool hasTypeSuffix(Opcode::Value op) {
         case Opcode::Pop:
         case Opcode::Convert:
         case Opcode::Cast:
+        case Opcode::Alloc:
+        case Opcode::Free:
+        case Opcode::Realloc:
+        case Opcode::MemCpy:
+        case Opcode::MemSet:
+        case Opcode::MemMove:
+        case Opcode::MemCmp:
+        case Opcode::Sqrt:
+        case Opcode::Cbrt:
+        case Opcode::Floor:
+        case Opcode::Ceil:
+        case Opcode::Round:
+        case Opcode::Trunc:
+        case Opcode::Abs:
+        case Opcode::Min:
+        case Opcode::Max:
+        case Opcode::Pow:
+        case Opcode::Fma:
+        case Opcode::Sin:
+        case Opcode::Cos:
+        case Opcode::Tan:
+        case Opcode::Asin:
+        case Opcode::Acos:
+        case Opcode::Atan:
+        case Opcode::Atan2:
+        case Opcode::Sinh:
+        case Opcode::Cosh:
+        case Opcode::Tanh:
+        case Opcode::Log:
+        case Opcode::Log2:
+        case Opcode::Log10:
+        case Opcode::Exp:
+        case Opcode::Exp2:
+        case Opcode::Hypot:
+        case Opcode::Copysign:
+        case Opcode::Fmod:
+        case Opcode::Popcount:
+        case Opcode::Clz:
+        case Opcode::Ctz:
+        case Opcode::Bswap:
+        case Opcode::Rotl:
+        case Opcode::Rotr:
+        case Opcode::Bitset:
+        case Opcode::Bitclear:
+        case Opcode::Bittest:
+        case Opcode::Parity:
+        case Opcode::Ffs:
+        case Opcode::Bitreverse:
             return true;
         default:
             return false;

@@ -53,6 +53,57 @@ const MnemonicMap& mnemonics() {
         m["pop"] = Opcode::Pop;
         m["convert"] = Opcode::Convert;
         m["cast"] = Opcode::Cast;
+
+        m["alloc"] = Opcode::Alloc;
+        m["free"] = Opcode::Free;
+        m["realloc"] = Opcode::Realloc;
+        m["memcpy"] = Opcode::MemCpy;
+        m["memset"] = Opcode::MemSet;
+        m["memmove"] = Opcode::MemMove;
+        m["memcmp"] = Opcode::MemCmp;
+
+        m["sqrt"] = Opcode::Sqrt;
+        m["cbrt"] = Opcode::Cbrt;
+        m["floor"] = Opcode::Floor;
+        m["ceil"] = Opcode::Ceil;
+        m["round"] = Opcode::Round;
+        m["trunc"] = Opcode::Trunc;
+        m["abs"] = Opcode::Abs;
+        m["min"] = Opcode::Min;
+        m["max"] = Opcode::Max;
+        m["pow"] = Opcode::Pow;
+        m["fma"] = Opcode::Fma;
+        m["sin"] = Opcode::Sin;
+        m["cos"] = Opcode::Cos;
+        m["tan"] = Opcode::Tan;
+        m["asin"] = Opcode::Asin;
+        m["acos"] = Opcode::Acos;
+        m["atan"] = Opcode::Atan;
+        m["atan2"] = Opcode::Atan2;
+        m["sinh"] = Opcode::Sinh;
+        m["cosh"] = Opcode::Cosh;
+        m["tanh"] = Opcode::Tanh;
+        m["log"] = Opcode::Log;
+        m["log2"] = Opcode::Log2;
+        m["log10"] = Opcode::Log10;
+        m["exp"] = Opcode::Exp;
+        m["exp2"] = Opcode::Exp2;
+        m["hypot"] = Opcode::Hypot;
+        m["copysign"] = Opcode::Copysign;
+        m["fmod"] = Opcode::Fmod;
+
+        m["popcount"] = Opcode::Popcount;
+        m["clz"] = Opcode::Clz;
+        m["ctz"] = Opcode::Ctz;
+        m["bswap"] = Opcode::Bswap;
+        m["rotl"] = Opcode::Rotl;
+        m["rotr"] = Opcode::Rotr;
+        m["bitset"] = Opcode::Bitset;
+        m["bitclear"] = Opcode::Bitclear;
+        m["bittest"] = Opcode::Bittest;
+        m["parity"] = Opcode::Parity;
+        m["ffs"] = Opcode::Ffs;
+        m["bitreverse"] = Opcode::Bitreverse;
     }
     return m;
 }
@@ -80,6 +131,54 @@ bool takesTypeSuffix(Opcode::Value op) {
         case Opcode::Pop:
         case Opcode::Convert:
         case Opcode::Cast:
+        case Opcode::Alloc:
+        case Opcode::Free:
+        case Opcode::Realloc:
+        case Opcode::MemCpy:
+        case Opcode::MemSet:
+        case Opcode::MemMove:
+        case Opcode::MemCmp:
+        case Opcode::Sqrt:
+        case Opcode::Cbrt:
+        case Opcode::Floor:
+        case Opcode::Ceil:
+        case Opcode::Round:
+        case Opcode::Trunc:
+        case Opcode::Abs:
+        case Opcode::Min:
+        case Opcode::Max:
+        case Opcode::Pow:
+        case Opcode::Fma:
+        case Opcode::Sin:
+        case Opcode::Cos:
+        case Opcode::Tan:
+        case Opcode::Asin:
+        case Opcode::Acos:
+        case Opcode::Atan:
+        case Opcode::Atan2:
+        case Opcode::Sinh:
+        case Opcode::Cosh:
+        case Opcode::Tanh:
+        case Opcode::Log:
+        case Opcode::Log2:
+        case Opcode::Log10:
+        case Opcode::Exp:
+        case Opcode::Exp2:
+        case Opcode::Hypot:
+        case Opcode::Copysign:
+        case Opcode::Fmod:
+        case Opcode::Popcount:
+        case Opcode::Clz:
+        case Opcode::Ctz:
+        case Opcode::Bswap:
+        case Opcode::Rotl:
+        case Opcode::Rotr:
+        case Opcode::Bitset:
+        case Opcode::Bitclear:
+        case Opcode::Bittest:
+        case Opcode::Parity:
+        case Opcode::Ffs:
+        case Opcode::Bitreverse:
             return true;
         default:
             return false;
@@ -105,6 +204,50 @@ bool hasDestOperand(Opcode::Value op) {
         case Opcode::Pop:
         case Opcode::Convert:
         case Opcode::Cast:
+        case Opcode::Alloc:
+        case Opcode::Realloc:
+        case Opcode::MemCmp:
+        case Opcode::Sqrt:
+        case Opcode::Cbrt:
+        case Opcode::Floor:
+        case Opcode::Ceil:
+        case Opcode::Round:
+        case Opcode::Trunc:
+        case Opcode::Abs:
+        case Opcode::Min:
+        case Opcode::Max:
+        case Opcode::Pow:
+        case Opcode::Fma:
+        case Opcode::Sin:
+        case Opcode::Cos:
+        case Opcode::Tan:
+        case Opcode::Asin:
+        case Opcode::Acos:
+        case Opcode::Atan:
+        case Opcode::Atan2:
+        case Opcode::Sinh:
+        case Opcode::Cosh:
+        case Opcode::Tanh:
+        case Opcode::Log:
+        case Opcode::Log2:
+        case Opcode::Log10:
+        case Opcode::Exp:
+        case Opcode::Exp2:
+        case Opcode::Hypot:
+        case Opcode::Copysign:
+        case Opcode::Fmod:
+        case Opcode::Popcount:
+        case Opcode::Clz:
+        case Opcode::Ctz:
+        case Opcode::Bswap:
+        case Opcode::Rotl:
+        case Opcode::Rotr:
+        case Opcode::Bitset:
+        case Opcode::Bitclear:
+        case Opcode::Bittest:
+        case Opcode::Parity:
+        case Opcode::Ffs:
+        case Opcode::Bitreverse:
             return true;
         default:
             return false;

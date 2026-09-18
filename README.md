@@ -5,7 +5,7 @@
 **uAssembly** — a small virtual instruction set, with its own compiler, linker, and VM.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.3-orange.svg)](spec/ISA.md)
+[![Version](https://img.shields.io/badge/version-v0.4-orange.svg)](spec/ISA.md)
 [![Language](https://img.shields.io/badge/C%2B%2B-03%20%E2%80%93%2020-00599C.svg?logo=c%2B%2B&logoColor=white)](CMakeLists.txt)
 [![Build](https://img.shields.io/badge/build-CMake-064F8C.svg?logo=cmake&logoColor=white)](CMakeLists.txt)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](CMakeLists.txt)
@@ -118,10 +118,12 @@ carries back the original `module` names — see
   to objects and link into one `.uo` binary, with actual cross-file `call`
   resolution and duplicate-export/unresolved-symbol errors — not a toy
   single-file-only story.
-- **Two separate memory regions.** `load`/`store` address a flat byte heap;
-  `push`/`pop` address a distinct, VM-wide call-stack-like region. Neither
-  is backed by an allocator yet (v0.x) — addresses are constructed
-  directly.
+- **Two separate memory regions.** `load`/`store` (plus `alloc`/`free`/
+  `realloc`/`memcpy`/`memset`/`memmove`/`memcmp`) address a flat byte heap;
+  `push`/`pop` address a distinct, VM-wide call-stack-like region.
+- **Extended math and bit manipulation.** `sqrt`/`sin`/`cos`/`log`/`pow`/...
+  and `popcount`/`clz`/`ctz`/`bswap`/`rotl`/`rotr`/... round out the core
+  instruction set beyond basic arithmetic — see [Instruction set](#instruction-set).
 - **Numeric conversion vs. bit reinterpretation, as two different
   instructions.** `convert.i32 rD, rS` truncates/extends a value's *meaning*
   (`f64` `4.0` → `i32` `4`); `cast.u32 rD, rS` reinterprets its *bits*
@@ -237,8 +239,10 @@ each category is for:
 | Type conversion         | `convert` `cast` | Numeric conversion vs. raw bit reinterpretation — see [Features](#features). |
 | Comparison & branching  | `cmp` `beq` `bne` `blt` `bgt` `ble` `bge` `jmp` | `cmp` sets a flag register; the six conditional branches and `jmp` read it. |
 | Calls & returns         | `call` `ret` | Calling another function (same or different source file) and returning a value. |
-| Flat heap memory        | `load` `store` | Byte-addressed access to a fixed-size memory region shared by the whole run. |
+| Flat heap memory        | `load` `store` `alloc` `free` `realloc` `memcpy` `memset` `memmove` `memcmp` | Byte-addressed access, plus a first-fit allocator, over a fixed-size memory region shared by the whole run. |
 | VM stack                | `push` `pop` | A separate, call-stack-like region, distinct from the heap. |
+| Extended math           | `sqrt` `cbrt` `floor` `ceil` `round` `trunc` `abs` `min` `max` `pow` `fma` `sin` `cos` `tan` `asin` `acos` `atan` `atan2` `sinh` `cosh` `tanh` `log` `log2` `log10` `exp` `exp2` `hypot` `copysign` `fmod` | Trig/log/exp/rounding beyond basic arithmetic; float-only except `abs`/`min`/`max`. |
+| Bit manipulation        | `popcount` `clz` `ctz` `bswap` `rotl` `rotr` `bitset` `bitclear` `bittest` `parity` `ffs` `bitreverse` | Integer-only bit-level operations. |
 
 ## Project layout
 
