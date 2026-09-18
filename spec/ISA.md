@@ -1,0 +1,510 @@
+<div align="center">
+
+# uASM
+
+### Instruction Set & File Format Specification
+
+[![Version](https://img.shields.io/badge/version-v0.3-orange.svg)](../README.md#versioning)
+[![Formats](https://img.shields.io/badge/formats-.uo-064F8C.svg)](#8-uo-binary-file-format)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
+
+*aka "uAssembly" — see [README.md](../README.md) for the toolchain itself.*
+
+</div>
+
+---
+
+### Contents
+
+1. [Types](#1-types)
+2. [Register model](#2-register-model)
+3. [Value representation](#3-value-representation)
+4. [Instruction set](#4-instruction-set-v03)
+5. [Module / text grammar](#5-module--text-grammar-ebnf)
+6. [Worked example: source to result](#6-worked-example-source-to-result)
+7. [Object / link model](#7-object--link-model)
+8. [`.uo` binary file format](#8-uo-binary-file-format)
+9. [Error handling](#9-error-handling)
+10. [Example programs](#10-example-programs)
+
+---
+
+## 1. Types
+
+uASM has 13 value types plus `void`. There is deliberately no notion of a
+user-defined type, struct, or array at the core level — those, if they
+ever arrive, are extension-era material (see
+[Versioning](../README.md#versioning) in the README). Every
+type below is fixed-size and known to the interpreter natively.
+
+<div align="center">
+
+| Type   | Meaning                                          | Size (bytes) |
+|:------:|---------------------------------------------------|:---:|
+| `i8`   | signed 8-bit integer                              | 1 |
+| `u8`   | unsigned 8-bit integer                            | 1 |
+| `i16`  | signed 16-bit integer                             | 2 |
+| `u16`  | unsigned 16-bit integer                           | 2 |
+| `i32`  | signed 32-bit integer                             | 4 |
+| `u32`  | unsigned 32-bit integer                           | 4 |
+| `i64`  | signed 64-bit integer                             | 8 |
+| `u64`  | unsigned 64-bit integer                           | 8 |
+| `i128` | signed 128-bit integer                            | 16 |
+| `u128` | unsigned 128-bit integer                          | 16 |
+| `f32`  | IEEE-754 single precision float                   | 4 |
+| `f64`  | IEEE-754 double precision float                   | 8 |
+| `ptr`  | opaque, address-sized value                       | 8 |
+| `void` | no value — only valid as a function return type   | 0 |
+
+</div>
+
+A type is never declared on its own — it only ever appears as a function
+parameter/return type, or as the `.T` suffix on an instruction (see
+[§4](#4-instruction-set-v03)). There's no separate `typedef`-like
+mechanism; if you need the same shape twice, write the suffix twice.
+
+`ptr` is deliberately opaque: it's just an address-sized integer with no
+arithmetic type rules of its own beyond what `load`/`store` and `push`/
+`pop` do with it (see [§4](#4-instruction-set-v03)). It exists so that
+"this is an address" is visible in the instruction stream, rather than
+overloading `u64` for two different jobs.
+
+---
+
+## 2. Register model
+
+Registers are virtual and unlimited per function: `r0`, `r1`, `r2`, ...
+Every instruction that writes a register may write a fresh one — the
+model is intentionally SSA-*like* (nothing stops a program from writing
+the same register twice, but nothing requires it either). There is no
+fixed register file to allocate ahead of time, and no declaration step:
+a register comes into existence the moment something writes to it.
+
+A register's type is whatever the instruction that wrote it says, via
+that instruction's `.T` suffix — the interpreter tracks only *dynamic*
+types (what a `Value` currently holds), never *static* ones. Reading a
+register that was never explicitly written returns a zero-valued `i32`
+(the frame's register file grows on demand and default-constructs to
+that); reading one that *was* written returns whatever `Value` it last
+held, regardless of which instruction is reading it now. Relying on the
+zero-default is not recommended — a future core or extension version may
+tighten this into a hard error — but it is well-defined in v0.x.
+
+```mermaid
+flowchart TB
+    subgraph Call["one function call = one frame"]
+        R0["r0"] 
+        R1["r1"]
+        R2["r2"]
+        RN["... rN"]
+        CMP["cmp flag<br/>(-1 / 0 / 1)"]
+    end
+    Caller["caller's frame"] -->|"call name, rD, args..."| Call
+    Call -->|"ret / ret.T"| Caller
+```
+
+Each function call gets its **own** register file — a growable array of
+`Value`, private to that call's frame — plus its own single-slot compare
+flag, set by `cmp` and read by the six conditional branches (see
+[§4](#4-instruction-set-v03)). Registers are never shared across calls:
+a recursive call to the same function gets a brand-new `r0`, `r1`, ...,
+completely independent of the caller's. This is what makes recursion work
+correctly with no extra bookkeeping in user code — there's no way to
+accidentally clobber a caller's register, because there's no *access* to
+a caller's registers at all.
+
+---
+
+## 3. Value representation
+
+A `Value` is a tagged union able to hold any of the 13 non-`void` types
+from [§1](#1-types) — conceptually, a type tag plus enough raw storage
+for the widest type (`i128`/`u128`, 16 bytes). Instructions are always
+explicit about which type they operate on via a `.T` suffix (e.g.
+`add.i32`, `mov.f64`); the same opcode name is reused across every type
+it makes sense for, rather than having a distinct mnemonic per type (no
+`addi32`/`addf64`/`adduq` zoo).
+
+This is also why `mov` and `convert` are different instructions (see
+[§4](#4-instruction-set-v03)): a `Value`'s tag can be *changed* — `mov`
+deliberately does not do so (it copies the source `Value` verbatim,
+carrying its dynamic type along for the ride), while `convert` explicitly
+re-tags and reinterprets it numerically.
+
+---
+
+## 4. Instruction set (v0.3)
+
+All arithmetic/data instructions take a type suffix `.T` where `T` is one of
+the types in [§1](#1-types) (excluding `void`).
+
+#### Data movement & conversion
+
+| Instruction         | Effect |
+|----------------------|--------|
+| `mov.T rD, imm`      | `rD := imm` |
+| `mov.T rD, rS`       | `rD := rS` (raw copy — see note below) |
+| `convert.T rD, rS`   | numeric conversion: `rD := (T) rS` (e.g. `f64` `4.0` → `i32` `4`; truncates floats toward zero, sign/zero-extends or narrows integers) |
+| `cast.T rD, rS`      | bitcast: `rD`'s raw bytes become `rS`'s raw bytes reinterpreted as `T` — no numeric conversion (e.g. `cast.u32` on an `f32` holding `1.0` gives `1065353216`, its IEEE-754 bit pattern, not `1`); truncates high bytes if `T` is narrower than `rS`'s type, zero-fills if wider |
+
+> **Note** — `mov.T rD, rS` never converts: it copies `rS`'s value into `rD`
+> as-is, whatever dynamic type `rS` currently holds. Use `convert` to change
+> a value's type while preserving its numeric meaning, and `cast` to
+> reinterpret its bits unchanged.
+
+```uasm
+mov.f32 r0, 1.0        ; r0 = 1.0f
+cast.u32 r1, r0        ; r1 = 1065353216   (raw IEEE-754 bits of 1.0f)
+convert.u32 r2, r0     ; r2 = 1            (numeric value of 1.0f)
+```
+
+#### Arithmetic
+
+| Instruction              | Effect |
+|----------------------------|--------|
+| `add.T rD, rA, rB`         | `rD := rA + rB` |
+| `sub.T rD, rA, rB`         | `rD := rA - rB` |
+| `mul.T rD, rA, rB`         | `rD := rA * rB` |
+| `div.T rD, rA, rB`         | `rD := rA / rB` |
+| `mod.T rD, rA, rB`         | `rD := rA % rB` (integer types only; error on `rB == 0`) |
+| `neg.T rD, rA`             | `rD := -rA` |
+
+`div`/`mod` by zero, on any type, is a runtime error rather than a
+silently-produced infinity/NaN or trap — uASM v0.x has no floating-point
+exception model, so it treats division-by-zero uniformly regardless of
+`T`.
+
+#### Bitwise & shifts
+
+| Instruction              | Effect |
+|----------------------------|--------|
+| `and.T rD, rA, rB`         | `rD := rA & rB` (bitwise AND; integer types only) |
+| `or.T rD, rA, rB`          | `rD := rA \| rB` (bitwise OR; integer types only) |
+| `xor.T rD, rA, rB`         | `rD := rA ^ rB` (bitwise XOR; integer types only) |
+| `not.T rD, rA`             | `rD := ~rA` (bitwise complement; integer types only) |
+| `shl.T rD, rA, rB`         | `rD := rA << rB` (integer types only; `rB` must be `[0, bit-width)`) |
+| `shr.T rD, rA, rB`         | `rD := rA >> rB` (arithmetic for signed `i*`, logical for unsigned `u*`/`ptr`; integer types only) |
+
+> **Note** — bitwise and shift instructions are undefined on `f32`/`f64` and
+> raise a runtime error if used with a float type suffix. A `shl`/`shr`
+> shift amount outside `[0, bit-width)` for `T` is likewise a runtime
+> error rather than a silently-masked shift.
+
+```uasm
+mov.u8 r0, 0xF0        ; (decimal 240)
+mov.u8 r1, 0x0F        ; (decimal 15)
+and.u8 r2, r0, r1      ; r2 = 0
+or.u8  r3, r0, r1      ; r3 = 255
+xor.u8 r4, r0, r1      ; r4 = 255
+not.u8 r5, r1          ; r5 = 240
+```
+
+#### Comparison & control flow
+
+| Instruction                | Effect |
+|------------------------------|--------|
+| `cmp.T rA, rB`                | sets the frame's flag register: `-1`/`0`/`1` for `<`/`==`/`>` |
+| `beq label` / `bne label`     | branch to block `label` if the last `cmp` was `==` / `!=` |
+| `blt label` / `bgt label`     | branch to block `label` if the last `cmp` was `<` / `>` |
+| `ble label` / `bge label`     | branch to block `label` if the last `cmp` was `<=` / `>=` |
+| `jmp label`                   | unconditional branch to block `label` |
+
+> **Note** — blocks never fall through implicitly: every block must end
+> with a `ret`, `ret.T`, `jmp`, or a conditional branch that is guaranteed
+> to be followed (in source) by a `jmp`/`ret` on the not-taken path — the
+> interpreter raises a runtime error if execution reaches the end of a
+> block's instruction list without having branched or returned. This is a
+> deliberate strictness: it turns "I forgot the else branch" into an
+> immediate, obvious runtime error instead of undefined fallthrough
+> behavior.
+
+```uasm
+entry:
+    cmp.i32 $a, $b
+    blt less
+    mov.i32 r2, 0
+    jmp done
+less:
+    mov.i32 r2, 1
+    jmp done
+done:
+    ret.i32 r2
+```
+
+#### Calls
+
+| Instruction                       | Effect |
+|-------------------------------------|--------|
+| `call name, rD, arg0, arg1...`      | calls function `name` (exported or not, as long as it's in the same link) with the given register values as arguments, stores the return value in `rD` |
+| `ret.T rS`                          | returns from the current function with `rS`'s value |
+| `ret`                                | returns from a `void` function |
+
+`call` can name a function `export`ed from a *different* source file — see
+[§7](#7-object--link-model) for how that resolution happens at link time.
+Arguments are passed positionally by register value, not by name; a
+called function reads them back via `$paramName` or the equivalent
+`r0`/`r1`/... (see [§5](#5-module--text-grammar-ebnf)).
+
+#### Memory — flat heap
+
+| Instruction         | Effect |
+|-----------------------|--------|
+| `load.T rD, rS`       | `rD := *rS` (`rS` holds a `ptr`) |
+| `store.T rD, rS`      | `*rD := rS` (`rD` holds a `ptr`) |
+
+`load`/`store` address a fixed-size (1 MiB in the reference interpreter) flat
+byte memory shared by the whole run, addressed by byte offset. There is no
+allocator instruction in v0.x — a program constructs an address directly
+(e.g. `mov.ptr rD, 100`) and is responsible for not overlapping live
+values; an out-of-bounds access is a runtime error. An allocator
+(`alloc`/`free` or similar) is a natural v0.x-or-extension candidate — see
+[Versioning](../README.md#versioning) in the README — but isn't part of
+the core yet.
+
+#### Memory — VM stack
+
+| Instruction    | Effect |
+|------------------|--------|
+| `push.T rS`      | pushes `rS`'s value onto the VM stack |
+| `pop.T rD`       | pops the top value (as type `T`) off the VM stack into `rD` |
+
+`push`/`pop` address a separate, fixed-size (64 KiB in the reference
+interpreter) VM-wide stack, distinct from the `load`/`store` heap. It is
+shared across every call/frame in a run (like a native call stack) rather
+than being per-function; overflow/underflow is a runtime error. This
+region exists specifically so a program has *somewhere* to spill a value
+temporarily without needing a heap address — it is not used implicitly by
+`call`/`ret` (arguments and return values travel through registers, not
+this stack).
+
+---
+
+## 5. Module / text grammar (EBNF)
+
+```ebnf
+program      := module_decl , { function } ;
+module_decl  := "module" , identifier ;
+
+function     := [ "export" ] , "func" , identifier , "(" , [ param_list ] , ")" ,
+                 "->" , type , "{" , { block } , "}" ;
+param_list   := param , { "," , param } ;
+param        := identifier , ":" , type ;
+
+block        := identifier , ":" , { instruction } ;
+instruction  := mnemonic , [ operand , { "," , operand } ] , [ comment ] ;
+operand      := register | param_ref | immediate | identifier ;
+register     := "r" , digit , { digit } ;
+param_ref    := "$" , identifier ;
+immediate    := [ "-" ] , digit , { digit } , [ "." , digit , { digit } ] ;
+comment      := ";" , { any_char_to_eol } ;
+
+type         := "i8" | "u8" | "i16" | "u16" | "i32" | "u32"
+              | "i64" | "u64" | "i128" | "u128" | "f32" | "f64"
+              | "void" | "ptr" ;
+```
+
+Comments start with `;` and run to end of line. Whitespace (including
+newlines) is insignificant outside of tokens.
+
+> **`$name` — parameter references.** Sugar for the register a parameter
+> was bound to: inside a function's body, `$name` (where `name` is one of
+> that function's declared parameters) is resolved **at parse time** to
+> the register holding the `name`-th parameter — i.e. `func f(a: i32, b: i32)`
+> makes `$a` and `r0` interchangeable, `$b` and `r1` interchangeable, and
+> so on by parameter position. It is a compile error to use `$name` for a
+> name that isn't a parameter of the enclosing function. `$name` resolves
+> to a plain register operand, so it may be used anywhere a register is
+> expected, including as a destination.
+
+A program is always exactly one `module` declaration followed by zero or
+more functions — there is no way to split a single module's functions
+across multiple `module` lines in the same file, and no way for a file to
+contribute functions to more than one module. (Splitting a project across
+*files*, each with its own module, is the normal way to organize a larger
+program — see [§7](#7-object--link-model).)
+
+---
+
+## 6. Worked example: source to result
+
+To make the pipeline concrete, here is a two-parameter function and what
+each stage of [`libuasm`](../README.md#how-it-fits-together) does with it:
+
+```uasm
+module basics
+
+export func main(a: i32, b: i32) -> i32 {
+entry:
+    add.i32 r2, $a, $b
+    ret.i32 r2
+}
+```
+
+1. **Lexing** turns the text into tokens: `module`, `basics`, `export`,
+   `func`, `main`, `(`, `a`, `:`, `i32`, `,`, `b`, `:`, `i32`, `)`, `->`,
+   `i32`, `{`, `entry`, `:`, `add`, `.`, `i32`, `r2`, `,`, `$a`, `,`, `$b`,
+   `ret`, `.`, `i32`, `r2`, `}`.
+2. **Parsing** builds one `Function` named `main`, `isExported = true`,
+   two `i32` params, one block `entry` with two instructions. `$a`/`$b`
+   are resolved immediately to register operands `r0`/`r1` (per
+   [§5](#5-module--text-grammar-ebnf)) — nothing downstream ever sees a
+   `$name` token.
+3. **Linking** (even for this single-file case) builds a one-function
+   table, confirms `main` is exported, and picks it as the entry point.
+4. **Serializing** writes a `.uo` file: magic `UASM!0`, one function
+   entry (name `main`, module `basics`, exported, two `i32` params,
+   `i32` return, its two-instruction `entry` block), entry index `0`.
+5. **Running** with `uasm run out.uo -- i32:40 i32:2` binds `r0 := 40`,
+   `r1 := 2`, executes `add.i32 r2, r0, r1` (`r2 := 42`), then
+   `ret.i32 r2` returns `42`, which becomes the process exit code.
+6. **Dumping** the same `.uo` (`uasm dump out.uo`) reconstructs source
+   text — module name and all — without ever touching the original file:
+   parameter names are not preserved by the binary format (see
+   [§8](#8-uo-binary-file-format)), so they print as `p0`, `p1`, ... instead
+   of `a`, `b`.
+
+---
+
+## 7. Object / link model
+
+Compiling one `.uasm` file produces an **object**: a table of functions
+(each a name, parameter types, return type, and its blocks/instructions),
+plus a list of which functions are `export`ed. Calls (`call name, ...`) to
+functions not defined in the same file are left as **unresolved symbol
+references** until link time.
+
+```mermaid
+flowchart LR
+    A1["a.uasm<br/>(module a)"] -->|parse| O1["Object A<br/>exports: helper"]
+    A2["b.uasm<br/>(module b)"] -->|parse| O2["Object B<br/>exports: main<br/>calls: helper"]
+    O1 --> L{{"link()"}}
+    O2 --> L
+    L -->|"1. merge tables<br/>2. reject dup exports<br/>3. resolve every call<br/>4. pick entry = main"| P["Program"]
+```
+
+**Linking** N objects together:
+
+1. Merge every object's function table into one program-wide table.
+2. It is an error for two objects to `export` the same function name.
+3. Every `call` operand must resolve to some function (exported or not) in
+   the merged table; an unresolved reference is a link error.
+4. The linked program's entry point is the exported function named `main`
+   (it is a link error if no such export exists, or if it exists in more
+   than one contributing object).
+
+A function does not need to be `export`ed to be *called* from within the
+same link — only to be visible as a link-time symbol from a different
+object's perspective, or to serve as the program's entry point.
+Non-exported "private" helper functions inside one file can freely call
+each other by name; `export` is purely about cross-object visibility (and
+about being eligible as `main`).
+
+---
+
+## 8. `.uo` binary file format
+
+Bytes 0–5: magic `"UASM!0"` — `!0` identifies this as a `.uo` file (a
+different file-type identifier will be used for future formats, e.g.
+`.ulib`). This is a type tag, not a version number.
+
+Following the magic, in order:
+
+```
+u32               function_count
+repeat function_count times:
+    u32           name_length
+    bytes[name_length]  name (UTF-8, not null-terminated)
+    u32           module_name_length
+    bytes[module_name_length]  module_name -- the `module` this function was
+                                               declared in; recovered on dump
+    u8            is_exported (0 or 1)
+    u8            param_count
+    repeat param_count times:
+        u8        param_type_tag
+    u8            return_type_tag
+    u32           code_offset     -- byte offset into the code section below
+    u32           code_length     -- length in bytes of this function's code
+
+u32               entry_function_index   -- index into the function table above
+
+u32               code_section_length
+bytes[code_section_length]   code_section  -- all functions' encoded
+                                               instructions, concatenated,
+                                               each function's bytes located
+                                               at [code_offset, code_offset+code_length)
+```
+
+Type tags are single bytes, one per type in [§1](#1-types), in the order
+listed there (`i8`=0, `u8`=1, ..., `ptr`=13).
+
+Instruction encoding inside the code section (v0.x, fixed-width for
+simplicity): `u8 opcode | u8 type_tag | u8 dst_present | u32 dst_reg |
+u8 operand_count | operand_count * (u8 operand_kind | u64 operand_bits)`,
+where `operand_kind` distinguishes a register index, an immediate value, or
+a block-label index (branches encode their target block as an index into a
+per-function block-offset table prepended to that function's code — this
+table is an implementation detail of the encoder/decoder, not re-specified
+byte-for-byte here since it may evolve during implementation).
+
+Two things the format deliberately does **not** preserve:
+
+- **Parameter names.** Only each parameter's *type* and position survive
+  serialization — `uasm dump` reconstructs `p0`, `p1`, ... rather than the
+  original `a`, `b`. If you need round-trippable parameter names, keep the
+  `.uasm` source around; the `.uo` binary is meant to be a compiled
+  artifact, not a lossless source-map.
+- **Comments and whitespace.** These are discarded at the lexer, long
+  before any binary is written — there is no comment-preservation
+  mechanism at any stage.
+
+What it *does* preserve is each function's originating `module` name,
+which is why a multi-module `.uo` still dumps back out grouped under
+distinct `module` headers (see
+[§6](#6-worked-example-source-to-result)).
+
+---
+
+## 9. Error handling
+
+Each stage of the toolchain reports failure as a distinct, plain-struct
+exception type rather than an error code — useful both for the CLI (which
+catches each type separately to print a tailored message) and for
+embedding code (see the [README](../README.md#embedding-libuasm)):
+
+| Stage | Exception | Carries |
+|-------|-----------|---------|
+| Lexing | `LexError` | `message`, `line` |
+| Parsing | `ParseError` | `message`, `line` |
+| Linking | `LinkError` | `message` |
+| Serializing / deserializing | `SerializeError` | `message` |
+| Running | `RuntimeError` | `message` |
+| Dump format parsing | `UnknownDumpFormat` | (a `std::runtime_error`; `what()`) |
+| CLI argument parsing (`type:value`) | `InvalidTypedValue` | (a `std::invalid_argument`; `what()`) |
+
+None of these are recoverable mid-stage — a lex/parse/link/runtime error
+aborts that call entirely; there is no partial-result or warning-level
+reporting in the core. A `ParseError`/`LexError` line number refers to the
+`.uasm` source file being compiled; `RuntimeError` has no line number,
+since it's raised against a `.uo` binary that no longer carries source
+positions.
+
+---
+
+## 10. Example programs
+
+Three annotated programs exercise the full instruction set breadth
+described above; see [`examples/`](../examples/) for the source:
+
+| File | Demonstrates |
+|------|--------------|
+| [`basics.uasm`](../examples/basics.uasm) | `$param` references, `add`, returning a value |
+| [`control-flow.uasm`](../examples/control-flow.uasm) | `cmp`, conditional branches, the no-fallthrough rule |
+| [`showcase.uasm`](../examples/showcase.uasm) | the VM stack (`push`/`pop`), the flat heap (`load`/`store`), bitwise ops, `convert` vs. `cast` |
+
+<div align="center">
+
+---
+
+*Part of the [uASM / uAssembly](../README.md) project · [MIT licensed](../LICENSE)*
+
+</div>

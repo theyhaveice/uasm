@@ -1,0 +1,13 @@
+; Basics: parameters (referenced by name via $param), arithmetic, and
+; returning a value.
+;
+;   uasm compile examples/basics.uasm -o basics.uo
+;   uasm run basics.uo -- i32:40 i32:2
+
+module basics
+
+export func main(a: i32, b: i32) -> i32 {
+entry:
+    add.i32 r2, $a, $b  ; r2 = a + b
+    ret.i32 r2
+}

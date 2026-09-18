@@ -1,0 +1,20 @@
+; Control flow: cmp + conditional branches. Blocks never fall through
+; implicitly, so every block ends in a jmp/ret.
+;
+;   uasm compile examples/control-flow.uasm -o control_flow.uo
+;   uasm run control_flow.uo -- i32:10 i32:20
+
+module control_flow
+
+export func main(a: i32, b: i32) -> i32 {
+entry:
+    cmp.i32 $a, $b
+    blt less
+    mov.i32 r2, 0   ; a >= b
+    jmp done
+less:
+    mov.i32 r2, 1   ; a < b
+    jmp done
+done:
+    ret.i32 r2
+}

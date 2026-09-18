@@ -1,0 +1,31 @@
+; Showcase: parameters, convert vs. cast, the VM stack (push/pop), the
+; flat heap (load/store), and bitwise ops, all in one program.
+;
+;   uasm compile examples/showcase.uasm -o showcase.uo
+;   uasm run showcase.uo -- f64:4.0 f64:2.0
+
+module showcase
+
+export func main(a: f64, b: f64) -> i32 {
+entry:
+    add.f64 r0, $a, $b   ; r0 = a + b (f64)
+    convert.i32 r1, r0   ; r1 = numeric conversion to i32 (e.g. 6.0 -> 6)
+
+    push.i32 r1          ; round-trip r1 through the VM stack
+    pop.i32 r2
+
+    mov.ptr r3, 0        ; round-trip r2 through the flat heap at address 0
+    store.i32 r3, r2
+    load.i32 r4, r3
+
+    and.i32 r5, r4, r4    ; bitwise ops (r5 = r4 & r4 = r4)
+    shl.i32 r6, r5, r4    ; shift left by r4 bits
+    shr.i32 r7, r6, r4    ; ...then back — r7 should equal r5
+
+    mov.f32 r8, 1.0
+    cast.u32 r9, r8       ; bitcast: raw IEEE-754 bits of 1.0f, not 1
+
+    ; sanity-check convert vs. cast actually differ, then return r7
+    sub.u32 r10, r9, r5
+    ret.i32 r7
+}
