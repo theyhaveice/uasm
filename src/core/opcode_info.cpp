@@ -65,6 +65,20 @@ bool opcodeFromName(const std::string& name, Opcode::Value& out) {
     return true;
 }
 
+ExtensionSet moduleExtensions(const Module& mod) {
+    ExtensionSet set;
+    for (size_t f = 0; f < mod.functions.size(); ++f) {
+        const Function& fn = mod.functions[f];
+        for (size_t b = 0; b < fn.blocks.size(); ++b) {
+            const Block& block = fn.blocks[b];
+            for (size_t i = 0; i < block.instructions.size(); ++i) {
+                set.enable(opcodeExtension(block.instructions[i].opcode));
+            }
+        }
+    }
+    return set;
+}
+
 unsigned extensionOpcodeCount(Extension::Value e) {
     unsigned n = 0;
     for (unsigned i = 0; i < kOpcodeTableSize; ++i) {

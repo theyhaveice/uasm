@@ -23,8 +23,8 @@ typedef std::map<std::string, uint32_t> ParamMap;
 
 class Parser {
 public:
-    Parser(std::vector<Token> tokens, std::string filename)
-        : tokens_(UASM_MOVE(tokens)), filename_(UASM_MOVE(filename)), pos_(0) {}
+    Parser(std::vector<Token> tokens, std::string filename, const ExtensionSet& enabled)
+        : tokens_(UASM_MOVE(tokens)), filename_(UASM_MOVE(filename)), pos_(0), enabled_(enabled) {}
 
     Module parse() {
         Module mod;
@@ -43,6 +43,7 @@ private:
     std::vector<Token> tokens_;
     std::string filename_;
     size_t pos_;
+    ExtensionSet enabled_;
     ParamMap currentParams_;
 
     const Token& cur() const { return tokens_[pos_]; }
@@ -141,6 +142,11 @@ private:
 
         Opcode::Value op = Opcode::Mov;
         if (!opcodeFromName(mnemonic, op)) fail("unknown instruction '" + mnemonic + "'");
+        Extension::Value ext = opcodeExtension(op);
+        if (!enabled_.has(ext)) {
+            fail("instruction '" + mnemonic + "' needs the '" + extensionName(ext) +
+                 "' extension (add --enable-" + extensionName(ext) + ")");
+        }
         instr.opcode = op;
 
         if (takesTypeSuffix(instr.opcode)) {
@@ -234,15 +240,19 @@ private:
 
 }
 
-Module parseModule(const std::string& source, const std::string& filename) {
+Module parseModule(const std::string& source, const std::string& filename, const ExtensionSet& enabled) {
     std::vector<Token> tokens;
     try {
         tokens = lex(source);
     } catch (const LexError& e) {
         throw ParseError(filename + ": " + e.message, e.line);
     }
-    Parser parser(UASM_MOVE(tokens), filename);
+    Parser parser(UASM_MOVE(tokens), filename, enabled);
     return parser.parse();
+}
+
+Module parseModule(const std::string& source, const std::string& filename) {
+    return parseModule(source, filename, ExtensionSet());
 }
 
 }

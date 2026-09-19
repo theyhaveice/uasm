@@ -11,11 +11,13 @@
 
 #include "uasm/codegen.h"
 #include "uasm/disassemble.h"
+#include "uasm/extensions.h"
 #include "uasm/glob.h"
 #include "uasm/interpreter.h"
 #include "uasm/jit.h"
 #include "uasm/linker.h"
 #include "uasm/object.h"
+#include "uasm/opcode_info.h"
 #include "uasm/parser.h"
 #include "uasm/serializer.h"
 
@@ -29,7 +31,64 @@ void printUsage() {
               << "      e.g. uasm run file.uo -j 4 -- i32:10 i32:32\n"
               << "  uasm dump [-f|--format uasm|json|yaml] <file.uo>\n"
               << "  uasm build <file.uo> --<target> -o <output>\n"
-              << "      targets: --macos-arm64 (others not yet implemented)\n";
+              << "      targets: --macos-arm64 (others not yet implemented)\n"
+              << "\n"
+              << "extensions (compile):\n"
+              << "  --enable-<ext>    enable one instruction-set extension\n"
+              << "  --disable-<ext>   disable one extension\n"
+              << "  --enable-all      enable every extension\n"
+              << "  --print-extensions  list extensions and their opcode counts\n";
+}
+
+int printExtensions() {
+    std::cout << "extension    opcodes  default\n";
+    for (unsigned i = 0; i < static_cast<unsigned>(uasm::Extension::ExtensionCount); ++i) {
+        uasm::Extension::Value e = static_cast<uasm::Extension::Value>(i);
+        std::string name = uasm::extensionName(e);
+        std::cout << name;
+        for (size_t pad = name.size(); pad < 13; ++pad) std::cout << ' ';
+        unsigned n = uasm::extensionOpcodeCount(e);
+        std::cout << n;
+        std::string ns;
+        {
+            unsigned v = n;
+            do { ns.insert(ns.begin(), static_cast<char>('0' + (v % 10))); v /= 10; } while (v > 0);
+        }
+        for (size_t pad = ns.size(); pad < 9; ++pad) std::cout << ' ';
+        std::cout << (e == uasm::Extension::Core ? "on" : "off") << "\n";
+    }
+    return 0;
+}
+
+bool parseExtensionFlag(const std::string& arg, uasm::ExtensionSet& set, std::string& error) {
+    const std::string enablePrefix = "--enable-";
+    const std::string disablePrefix = "--disable-";
+    if (arg == "--enable-all") {
+        set.enableAll();
+        return true;
+    }
+    if (arg.size() > enablePrefix.size() && arg.compare(0, enablePrefix.size(), enablePrefix) == 0) {
+        std::string name = arg.substr(enablePrefix.size());
+        uasm::Extension::Value e;
+        if (!uasm::extensionFromName(name, e)) {
+            error = "unknown extension '" + name + "'";
+            return false;
+        }
+        set.enable(e);
+        return true;
+    }
+    if (arg.size() > disablePrefix.size() && arg.compare(0, disablePrefix.size(), disablePrefix) == 0) {
+        std::string name = arg.substr(disablePrefix.size());
+        uasm::Extension::Value e;
+        if (!uasm::extensionFromName(name, e)) {
+            error = "unknown extension '" + name + "'";
+            return false;
+        }
+        set.disable(e);
+        return true;
+    }
+    error.clear();
+    return false;
 }
 
 std::string readFile(const std::string& path) {
@@ -43,6 +102,7 @@ std::string readFile(const std::string& path) {
 int runCompile(const std::vector<std::string>& args) {
     std::vector<std::string> inputPatterns;
     std::string output;
+    uasm::ExtensionSet enabled;
 
     for (size_t i = 0; i < args.size(); ++i) {
         if (args[i] == "-o") {
@@ -51,7 +111,15 @@ int runCompile(const std::vector<std::string>& args) {
                 return 1;
             }
             output = args[++i];
+        } else if (args[i] == "--print-extensions") {
+            return printExtensions();
         } else {
+            std::string error;
+            if (parseExtensionFlag(args[i], enabled, error)) continue;
+            if (!error.empty()) {
+                std::cerr << "error: " << error << "\n";
+                return 1;
+            }
             inputPatterns.push_back(args[i]);
         }
     }
@@ -78,7 +146,7 @@ int runCompile(const std::vector<std::string>& args) {
     try {
         for (size_t i = 0; i < inputFiles.size(); ++i) {
             std::string source = readFile(inputFiles[i]);
-            objects.push_back(uasm::parseModule(source, inputFiles[i]));
+            objects.push_back(uasm::parseModule(source, inputFiles[i], enabled));
         }
     } catch (const uasm::ParseError& e) {
         std::cerr << "error: " << e.message << " (line " << e.line << ")\n";
@@ -327,6 +395,7 @@ int main(int argc, char** argv) {
     std::string command = argv[1];
     std::vector<std::string> rest(argv + 2, argv + argc);
 
+    if (command == "--print-extensions" || command == "--list-extensions") return printExtensions();
     if (command == "compile") return runCompile(rest);
     if (command == "run") return runRun(rest);
     if (command == "dump") return runDump(rest);

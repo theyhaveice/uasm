@@ -27,4 +27,6 @@ inline bool takesNoOperands(Opcode::Value op) { return (opcodeFlags(op) & OpFlag
 
 unsigned extensionOpcodeCount(Extension::Value e);
 
+ExtensionSet moduleExtensions(const Module& mod);
+
 }

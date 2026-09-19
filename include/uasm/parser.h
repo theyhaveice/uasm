@@ -3,6 +3,7 @@
 #include <string>
 
 #include "uasm/ast.h"
+#include "uasm/extensions.h"
 
 namespace uasm {
 
@@ -13,5 +14,7 @@ struct ParseError {
 };
 
 Module parseModule(const std::string& source, const std::string& filename);
+
+Module parseModule(const std::string& source, const std::string& filename, const ExtensionSet& enabled);
 
 }
