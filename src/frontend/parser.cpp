@@ -72,6 +72,18 @@ private:
         advance();
     }
 
+    void checkTypeExtension(Type::Value t) {
+        Extension::Value need = Extension::Core;
+        if (t == Type::V128) need = Extension::Simd128;
+        else if (t == Type::V256) need = Extension::Simd256;
+        else if (t == Type::V512) need = Extension::Simd512;
+        else return;
+        if (!enabled_.has(need)) {
+            fail(std::string("type '") + typeName(t) + "' needs the '" + extensionName(need) +
+                 "' extension (add --enable-" + extensionName(need) + ")");
+        }
+    }
+
     Type::Value expectType() {
         const Token& t = expectAny(TokenKind::Identifier);
         Type::Value ty = Type::I32;
@@ -160,6 +172,9 @@ private:
         } else {
             instr.type2 = instr.type;
         }
+
+        checkTypeExtension(instr.type);
+        checkTypeExtension(instr.type2);
 
         if (takesNoOperands(instr.opcode)) return instr;
 

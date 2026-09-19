@@ -28,6 +28,7 @@ add_library(uasm SHARED
   src/frontend/parser.cpp
   src/linker/linker.cpp
   src/vm/interpreter.cpp
+  src/vm/vector_ops.cpp
   src/format/serializer.cpp
   src/format/disassemble.cpp
   src/util/glob.cpp

@@ -25,6 +25,9 @@ double Value::asDouble() const {
         case Type::F32: return static_cast<double>(bits.f32);
         case Type::F64: return bits.f64;
         case Type::Ptr: return static_cast<double>(bits.ptr);
+        case Type::V128:
+        case Type::V256:
+        case Type::V512:
         case Type::Void: return 0.0;
     }
     return 0.0;
@@ -45,6 +48,9 @@ Int128 Value::asInt128() const {
         case Type::F32: return static_cast<Int128>(bits.f32);
         case Type::F64: return static_cast<Int128>(bits.f64);
         case Type::Ptr: return static_cast<Int128>(bits.ptr);
+        case Type::V128:
+        case Type::V256:
+        case Type::V512:
         case Type::Void: return 0;
     }
     return 0;
@@ -67,6 +73,9 @@ Value Value::fromDouble(Type::Value t, double v) {
         case Type::F32: r.bits.f32 = static_cast<float>(v); break;
         case Type::F64: r.bits.f64 = v; break;
         case Type::Ptr: r.bits.ptr = static_cast<uint64_t>(v); break;
+        case Type::V128:
+        case Type::V256:
+        case Type::V512:
         case Type::Void: break;
     }
     return r;
@@ -89,6 +98,9 @@ Value Value::fromInt128(Type::Value t, Int128 v) {
         case Type::F32: r.bits.f32 = static_cast<float>(v); break;
         case Type::F64: r.bits.f64 = static_cast<double>(v); break;
         case Type::Ptr: r.bits.ptr = static_cast<uint64_t>(v); break;
+        case Type::V128:
+        case Type::V256:
+        case Type::V512:
         case Type::Void: break;
     }
     return r;

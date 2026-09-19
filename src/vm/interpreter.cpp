@@ -1,6 +1,7 @@
 #include "uasm/interpreter.h"
 
 #include "syscall_platform.h"
+#include "vector_ops.h"
 
 #include "uasm/compat.h"
 #include "uasm/opcode_info.h"
@@ -2371,6 +2372,128 @@ public:
                     case Opcode::Noopt:
                     case Opcode::Sideeffect:
                         break;
+#define UASM_OP(name, mnemonic, ext, flags) case Opcode::name:
+#include "uasm/opcodes_simd.def"
+#undef UASM_OP
+                    {
+                        if (!vectorOpIsMemory(instr.opcode)) {
+                            std::vector<Value> vargs;
+                            for (size_t i = 0; i < instr.operands.size(); ++i) {
+                                vargs.push_back(readOperand(frame, instr.operands[i],
+                                                            instr.operands[i].kind == Operand::Register
+                                                                ? instr.type
+                                                                : instr.type2));
+                            }
+                            Value r = vectorCompute(instr.opcode, instr.type, instr.type2,
+                                                    vargs.empty() ? 0 : &vargs[0], vargs.size());
+                            if (instr.hasDest) frame.reg(instr.dest) = r;
+                            break;
+                        }
+                        switch (instr.opcode) {
+                    case Opcode::VLoad:
+                    case Opcode::VLoadu: {
+                        uint64_t addr = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        size_t nbytes = vectorBytes(instr.type);
+                        checkRange(addr, nbytes);
+                        Value v;
+                        v.type = instr.type;
+                        std::memcpy(v.bits.vec, &memory_[0] + addr, nbytes);
+                        frame.reg(instr.dest) = v;
+                        break;
+                    }
+                    case Opcode::VStore:
+                    case Opcode::VStoreu: {
+                        uint64_t addr = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        Value v = readOperand(frame, instr.operands[1], instr.type);
+                        size_t nbytes = vectorBytes(instr.type);
+                        checkRange(addr, nbytes);
+                        std::memcpy(&memory_[0] + addr, v.bits.vec, nbytes);
+                        break;
+                    }
+                    case Opcode::VLoadsplat: {
+                        uint64_t addr = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        size_t ls = sizeOfType(instr.type2);
+                        checkRange(addr, ls);
+                        Value lane;
+                        lane.type = instr.type2;
+                        std::memcpy(&lane.bits, &memory_[0] + addr, ls);
+                        Value args[1];
+                        args[0] = lane;
+                        frame.reg(instr.dest) = vectorCompute(Opcode::VSplat, instr.type, instr.type2, args, 1);
+                        break;
+                    }
+                    case Opcode::VGather: {
+                        uint64_t base = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        Value idx = readOperand(frame, instr.operands[1], instr.type);
+                        size_t n = vectorLaneCount(instr.type, instr.type2);
+                        size_t ls = sizeOfType(instr.type2);
+                        Value v;
+                        v.type = instr.type;
+                        for (size_t i = 0; i < n; ++i) {
+                            Int128 k = vectorGetLane(idx, instr.type2, i).asInt128();
+                            uint64_t a = base + static_cast<uint64_t>(k) * ls;
+                            checkRange(a, ls);
+                            Value lane;
+                            lane.type = instr.type2;
+                            std::memcpy(&lane.bits, &memory_[0] + a, ls);
+                            vectorSetLane(v, instr.type2, i, lane);
+                        }
+                        frame.reg(instr.dest) = v;
+                        break;
+                    }
+                    case Opcode::VScatter: {
+                        uint64_t base = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        Value idx = readOperand(frame, instr.operands[1], instr.type);
+                        Value src = readOperand(frame, instr.operands[2], instr.type);
+                        size_t n = vectorLaneCount(instr.type, instr.type2);
+                        size_t ls = sizeOfType(instr.type2);
+                        for (size_t i = 0; i < n; ++i) {
+                            Int128 k = vectorGetLane(idx, instr.type2, i).asInt128();
+                            uint64_t a = base + static_cast<uint64_t>(k) * ls;
+                            checkRange(a, ls);
+                            Value lane = vectorGetLane(src, instr.type2, i);
+                            std::memcpy(&memory_[0] + a, &lane.bits, ls);
+                        }
+                        break;
+                    }
+                    case Opcode::VMaskload: {
+                        uint64_t addr = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        Value mask = readOperand(frame, instr.operands[1], instr.type);
+                        size_t n = vectorLaneCount(instr.type, instr.type2);
+                        size_t ls = sizeOfType(instr.type2);
+                        Value v;
+                        v.type = instr.type;
+                        for (size_t i = 0; i < n; ++i) {
+                            if (vectorGetLane(mask, instr.type2, i).asInt128() == 0) continue;
+                            uint64_t a = addr + i * ls;
+                            checkRange(a, ls);
+                            Value lane;
+                            lane.type = instr.type2;
+                            std::memcpy(&lane.bits, &memory_[0] + a, ls);
+                            vectorSetLane(v, instr.type2, i, lane);
+                        }
+                        frame.reg(instr.dest) = v;
+                        break;
+                    }
+                    case Opcode::VMaskstore: {
+                        uint64_t addr = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        Value mask = readOperand(frame, instr.operands[1], instr.type);
+                        Value src = readOperand(frame, instr.operands[2], instr.type);
+                        size_t n = vectorLaneCount(instr.type, instr.type2);
+                        size_t ls = sizeOfType(instr.type2);
+                        for (size_t i = 0; i < n; ++i) {
+                            if (vectorGetLane(mask, instr.type2, i).asInt128() == 0) continue;
+                            uint64_t a = addr + i * ls;
+                            checkRange(a, ls);
+                            Value lane = vectorGetLane(src, instr.type2, i);
+                            std::memcpy(&memory_[0] + a, &lane.bits, ls);
+                        }
+                        break;
+                    }
+                            default: break;
+                        }
+                        break;
+                    }
                     case Opcode::Syscall: {
                         int64_t sid = static_cast<int64_t>(readOperand(frame, instr.operands[0], Type::I64).asInt128());
                         int64_t a0 = instr.operands.size() > 1

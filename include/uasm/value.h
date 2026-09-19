@@ -32,7 +32,8 @@ struct Value {
         float f32;
         double f64;
         uint64_t ptr;
-        Bits() : u128(0) {}
+        uint8_t vec[64];
+        Bits() { std::memset(this, 0, sizeof(*this)); }
     } bits;
 
     Value() : type(Type::I32) {}

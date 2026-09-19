@@ -32,6 +32,12 @@ std::size_t sizeOfType(Type::Value t) {
         case Type::I128:
         case Type::U128:
             return 16;
+        case Type::V128:
+            return 16;
+        case Type::V256:
+            return 32;
+        case Type::V512:
+            return 64;
         case Type::Void:
             return 0;
     }
