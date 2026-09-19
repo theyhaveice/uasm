@@ -68,6 +68,7 @@ expect 16 v0.4-features
 expect 1  syscall-demo
 expect 0  isa-core
 expect 0  isa-flow
+expect 0  isa-bits
 expect_jit 42 basics i32:40 i32:2
 expect_jit 1  control-flow i32:10 i32:20
 roundtrip

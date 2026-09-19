@@ -652,6 +652,149 @@ bool computeWithOverflow(Opcode::Value op, Type::Value type, const Value& a, con
     }
 }
 
+UInt128 bextGeneric(UInt128 v, UInt128 mask, size_t bits) {
+    UInt128 r = 0;
+    size_t k = 0;
+    for (size_t i = 0; i < bits; ++i) {
+        if ((mask >> i) & 1) {
+            if ((v >> i) & 1) r |= static_cast<UInt128>(1) << k;
+            ++k;
+        }
+    }
+    return r;
+}
+
+UInt128 bdepGeneric(UInt128 v, UInt128 mask, size_t bits) {
+    UInt128 r = 0;
+    size_t k = 0;
+    for (size_t i = 0; i < bits; ++i) {
+        if ((mask >> i) & 1) {
+            if ((v >> k) & 1) r |= static_cast<UInt128>(1) << i;
+            ++k;
+        }
+    }
+    return r;
+}
+
+UInt128 lowMask(size_t n) {
+    if (n == 0) return 0;
+    if (n >= 128) return ~static_cast<UInt128>(0);
+    return (static_cast<UInt128>(1) << n) - 1;
+}
+
+UInt128 interleaveBits(UInt128 v, size_t bits) {
+    UInt128 r = 0;
+    for (size_t i = 0; i * 2 < bits; ++i) {
+        if ((v >> i) & 1) r |= static_cast<UInt128>(1) << (i * 2);
+    }
+    return r;
+}
+
+UInt128 deinterleaveBits(UInt128 v, size_t bits) {
+    UInt128 r = 0;
+    for (size_t i = 0; i * 2 < bits; ++i) {
+        if ((v >> (i * 2)) & 1) r |= static_cast<UInt128>(1) << i;
+    }
+    return r;
+}
+
+Value bitManipUnary(Opcode::Value op, Type::Value type, const Value& a) {
+    requireInt(type, "bit manipulation");
+    size_t bits = bitWidth(type);
+    UInt128 v = maskToWidth(static_cast<UInt128>(a.asInt128()), bits);
+    switch (op) {
+        case Opcode::Blsi: return Value::fromInt128(type, static_cast<Int128>(v & (~v + 1)));
+        case Opcode::Blsr: return Value::fromInt128(type, static_cast<Int128>(v & (v - 1)));
+        case Opcode::Blsmsk: return Value::fromInt128(type, static_cast<Int128>(v ^ (v - 1)));
+        case Opcode::Gray: return Value::fromInt128(type, static_cast<Int128>(v ^ (v >> 1)));
+        case Opcode::Ungray: {
+            UInt128 r = v;
+            for (size_t s = 1; s < bits; s <<= 1) r ^= r >> s;
+            return Value::fromInt128(type, static_cast<Int128>(r));
+        }
+        case Opcode::Clrsb: {
+            Int128 x = a.asInt128();
+            UInt128 u = maskToWidth(static_cast<UInt128>(x), bits);
+            int sign = static_cast<int>((u >> (bits - 1)) & 1);
+            int n = 0;
+            for (size_t i = bits - 1; i-- > 0;) {
+                if (static_cast<int>((u >> i) & 1) != sign) break;
+                ++n;
+            }
+            return Value::fromInt128(type, n);
+        }
+        case Opcode::Zerocount: return Value::fromInt128(type, static_cast<int>(bits) - popcountGeneric(v, bits));
+        case Opcode::Hibit: return Value::fromInt128(type, v == 0 ? -1 : static_cast<int>(bits) - 1 - clzGeneric(v, bits));
+        case Opcode::Lobit: return Value::fromInt128(type, v == 0 ? -1 : ctzGeneric(v, bits));
+        case Opcode::Msbmask:
+            return Value::fromInt128(type, ((v >> (bits - 1)) & 1) ? static_cast<Int128>(-1) : 0);
+        case Opcode::Nibbleswap: {
+            UInt128 r = 0;
+            size_t nibbles = bits / 4;
+            for (size_t i = 0; i < nibbles; ++i) {
+                r |= ((v >> (i * 4)) & 0xF) << ((nibbles - 1 - i) * 4);
+            }
+            return Value::fromInt128(type, static_cast<Int128>(r));
+        }
+        case Opcode::Bitrev8: {
+            UInt128 r = 0;
+            size_t bytes = bits / 8;
+            for (size_t b = 0; b < bytes; ++b) {
+                UInt128 byte = (v >> (b * 8)) & 0xFF;
+                UInt128 rb = bitreverseGeneric(byte, 8);
+                r |= rb << (b * 8);
+            }
+            return Value::fromInt128(type, static_cast<Int128>(r));
+        }
+        case Opcode::Bswap16:
+            return Value::fromInt128(type, static_cast<Int128>((v & ~static_cast<UInt128>(0xFFFF)) |
+                                                                bswapGeneric(v & 0xFFFF, 2)));
+        case Opcode::Bswap32:
+            return Value::fromInt128(type, static_cast<Int128>((v & ~static_cast<UInt128>(0xFFFFFFFFu)) |
+                                                                bswapGeneric(v & 0xFFFFFFFFu, 4)));
+        case Opcode::Bswap64:
+            return Value::fromInt128(type, static_cast<Int128>(bswapGeneric(v, 8)));
+        case Opcode::Bitinterleave: return Value::fromInt128(type, static_cast<Int128>(interleaveBits(v, bits)));
+        case Opcode::Bitdeinterleave: return Value::fromInt128(type, static_cast<Int128>(deinterleaveBits(v, bits)));
+        case Opcode::Lowmask: {
+            Int128 n = a.asInt128();
+            if (n < 0) throw RuntimeError("lowmask of a negative width");
+            return Value::fromInt128(type, static_cast<Int128>(lowMask(static_cast<size_t>(n))));
+        }
+        case Opcode::Himask: {
+            Int128 n = a.asInt128();
+            if (n < 0 || static_cast<size_t>(n) > bits) throw RuntimeError("himask width out of range");
+            UInt128 low = lowMask(bits - static_cast<size_t>(n));
+            return Value::fromInt128(type, static_cast<Int128>(maskToWidth(~low, bits)));
+        }
+        default: throw RuntimeError("not a unary bit-manipulation opcode");
+    }
+}
+
+Value bitManipBinary(Opcode::Value op, Type::Value type, const Value& a, const Value& b) {
+    requireInt(type, "bit manipulation");
+    size_t bits = bitWidth(type);
+    UInt128 x = maskToWidth(static_cast<UInt128>(a.asInt128()), bits);
+    UInt128 y = maskToWidth(static_cast<UInt128>(b.asInt128()), bits);
+    Int128 n = b.asInt128();
+    switch (op) {
+        case Opcode::Bext: return Value::fromInt128(type, static_cast<Int128>(bextGeneric(x, y, bits)));
+        case Opcode::Bdep: return Value::fromInt128(type, static_cast<Int128>(bdepGeneric(x, y, bits)));
+        case Opcode::Sextbit: {
+            if (n <= 0 || static_cast<size_t>(n) > bits) throw RuntimeError("sextbit width out of range");
+            size_t w = static_cast<size_t>(n);
+            UInt128 masked = x & lowMask(w);
+            if ((masked >> (w - 1)) & 1) masked |= maskToWidth(~lowMask(w), bits);
+            return Value::fromInt128(type, static_cast<Int128>(masked));
+        }
+        case Opcode::Zextbit: {
+            if (n < 0 || static_cast<size_t>(n) > bits) throw RuntimeError("zextbit width out of range");
+            return Value::fromInt128(type, static_cast<Int128>(x & lowMask(static_cast<size_t>(n))));
+        }
+        default: throw RuntimeError("not a binary bit-manipulation opcode");
+    }
+}
+
 const double kPi = 3.14159265358979323846;
 
 Value makeBool(bool b) { return Value::fromInt128(Type::I32, b ? 1 : 0); }
@@ -1782,6 +1925,452 @@ public:
                         frame.reg(instr.dest) = makePtr(((a + align - 1) / align) * align);
                         break;
                     }
+                    case Opcode::Blsi:
+                    case Opcode::Blsr:
+                    case Opcode::Blsmsk:
+                    case Opcode::Gray:
+                    case Opcode::Ungray:
+                    case Opcode::Clrsb:
+                    case Opcode::Zerocount:
+                    case Opcode::Hibit:
+                    case Opcode::Lobit:
+                    case Opcode::Msbmask:
+                    case Opcode::Nibbleswap:
+                    case Opcode::Bitrev8:
+                    case Opcode::Bswap16:
+                    case Opcode::Bswap32:
+                    case Opcode::Bswap64:
+                    case Opcode::Bitinterleave:
+                    case Opcode::Bitdeinterleave:
+                    case Opcode::Lowmask:
+                    case Opcode::Himask: {
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        frame.reg(instr.dest) = bitManipUnary(instr.opcode, instr.type, a);
+                        break;
+                    }
+                    case Opcode::Bext:
+                    case Opcode::Bdep:
+                    case Opcode::Sextbit:
+                    case Opcode::Zextbit: {
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        Value b = readOperand(frame, instr.operands[1], instr.type);
+                        frame.reg(instr.dest) = bitManipBinary(instr.opcode, instr.type, a, b);
+                        break;
+                    }
+                    case Opcode::Bfextract: {
+                        requireInt(instr.type, "bfextract");
+                        size_t bits = bitWidth(instr.type);
+                        UInt128 v = unsignedOf(readOperand(frame, instr.operands[0], instr.type), instr.type);
+                        Int128 start = readOperand(frame, instr.operands[1], Type::I64).asInt128();
+                        Int128 len = readOperand(frame, instr.operands[2], Type::I64).asInt128();
+                        if (start < 0 || len < 0 || static_cast<size_t>(start + len) > bits) {
+                            throw RuntimeError("bitfield range out of bounds");
+                        }
+                        UInt128 r = (v >> static_cast<size_t>(start)) & lowMask(static_cast<size_t>(len));
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, static_cast<Int128>(r));
+                        break;
+                    }
+                    case Opcode::Bfinsert:
+                    case Opcode::Bfclear:
+                    case Opcode::Bfset: {
+                        requireInt(instr.type, "bitfield op");
+                        size_t bits = bitWidth(instr.type);
+                        UInt128 v = unsignedOf(readOperand(frame, instr.operands[0], instr.type), instr.type);
+                        size_t argBase = (instr.opcode == Opcode::Bfinsert) ? 2 : 1;
+                        UInt128 field = (instr.opcode == Opcode::Bfinsert)
+                                            ? unsignedOf(readOperand(frame, instr.operands[1], instr.type), instr.type)
+                                            : 0;
+                        Int128 start = readOperand(frame, instr.operands[argBase], Type::I64).asInt128();
+                        Int128 len = readOperand(frame, instr.operands[argBase + 1], Type::I64).asInt128();
+                        if (start < 0 || len < 0 || static_cast<size_t>(start + len) > bits) {
+                            throw RuntimeError("bitfield range out of bounds");
+                        }
+                        UInt128 mask = lowMask(static_cast<size_t>(len)) << static_cast<size_t>(start);
+                        UInt128 r;
+                        if (instr.opcode == Opcode::Bfinsert) {
+                            r = (v & ~mask) | ((field << static_cast<size_t>(start)) & mask);
+                        } else if (instr.opcode == Opcode::Bfclear) {
+                            r = v & ~mask;
+                        } else {
+                            r = v | mask;
+                        }
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, static_cast<Int128>(maskToWidth(r, bits)));
+                        break;
+                    }
+                    case Opcode::Shld:
+                    case Opcode::Shrd: {
+                        requireInt(instr.type, "funnel shift");
+                        size_t bits = bitWidth(instr.type);
+                        UInt128 hi = unsignedOf(readOperand(frame, instr.operands[0], instr.type), instr.type);
+                        UInt128 lo = unsignedOf(readOperand(frame, instr.operands[1], instr.type), instr.type);
+                        Int128 n = readOperand(frame, instr.operands[2], Type::I64).asInt128();
+                        if (n < 0 || static_cast<size_t>(n) >= bits) throw RuntimeError("shift amount out of range");
+                        size_t s = static_cast<size_t>(n);
+                        UInt128 r;
+                        if (s == 0) {
+                            r = (instr.opcode == Opcode::Shld) ? hi : lo;
+                        } else if (instr.opcode == Opcode::Shld) {
+                            r = (hi << s) | (lo >> (bits - s));
+                        } else {
+                            r = (lo >> s) | (hi << (bits - s));
+                        }
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, static_cast<Int128>(maskToWidth(r, bits)));
+                        break;
+                    }
+                    case Opcode::Bitselect: {
+                        requireInt(instr.type, "bitselect");
+                        UInt128 a = unsignedOf(readOperand(frame, instr.operands[0], instr.type), instr.type);
+                        UInt128 b = unsignedOf(readOperand(frame, instr.operands[1], instr.type), instr.type);
+                        UInt128 m = unsignedOf(readOperand(frame, instr.operands[2], instr.type), instr.type);
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, static_cast<Int128>((a & m) | (b & ~m)));
+                        break;
+                    }
+                    case Opcode::Memchr:
+                    case Opcode::Memrchr: {
+                        uint64_t buf = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint64_t len = static_cast<uint64_t>(readOperand(frame, instr.operands[1], instr.type).asInt128());
+                        uint8_t c = static_cast<uint8_t>(readOperand(frame, instr.operands[2], instr.type).asInt128() & 0xFF);
+                        checkRange(buf, len);
+                        uint64_t found = 0;
+                        bool ok = false;
+                        if (instr.opcode == Opcode::Memchr) {
+                            for (uint64_t i = 0; i < len; ++i) {
+                                if (memory_[buf + i] == c) { found = buf + i; ok = true; break; }
+                            }
+                        } else {
+                            for (uint64_t i = len; i-- > 0;) {
+                                if (memory_[buf + i] == c) { found = buf + i; ok = true; break; }
+                            }
+                        }
+                        frame.reg(instr.dest) = makePtr(ok ? found : 0);
+                        break;
+                    }
+                    case Opcode::Memfind: {
+                        uint64_t hay = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint64_t hlen = static_cast<uint64_t>(readOperand(frame, instr.operands[1], instr.type).asInt128());
+                        uint64_t nee = readOperand(frame, instr.operands[2], Type::Ptr).bits.ptr;
+                        uint64_t nlen = static_cast<uint64_t>(readOperand(frame, instr.operands[3], instr.type).asInt128());
+                        checkRange(hay, hlen);
+                        checkRange(nee, nlen);
+                        uint64_t found = 0;
+                        bool ok = false;
+                        if (nlen <= hlen) {
+                            for (uint64_t i = 0; i + nlen <= hlen; ++i) {
+                                if (std::memcmp(&memory_[0] + hay + i, &memory_[0] + nee, nlen) == 0) {
+                                    found = hay + i;
+                                    ok = true;
+                                    break;
+                                }
+                            }
+                        }
+                        frame.reg(instr.dest) = makePtr(ok ? found : 0);
+                        break;
+                    }
+                    case Opcode::Memswap: {
+                        uint64_t a = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint64_t b = readOperand(frame, instr.operands[1], Type::Ptr).bits.ptr;
+                        uint64_t len = static_cast<uint64_t>(readOperand(frame, instr.operands[2], instr.type).asInt128());
+                        checkRange(a, len);
+                        checkRange(b, len);
+                        for (uint64_t i = 0; i < len; ++i) {
+                            uint8_t t = memory_[a + i];
+                            memory_[a + i] = memory_[b + i];
+                            memory_[b + i] = t;
+                        }
+                        break;
+                    }
+                    case Opcode::Memrev: {
+                        uint64_t buf = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint64_t len = static_cast<uint64_t>(readOperand(frame, instr.operands[1], instr.type).asInt128());
+                        checkRange(buf, len);
+                        for (uint64_t i = 0; i * 2 + 1 < len; ++i) {
+                            uint8_t t = memory_[buf + i];
+                            memory_[buf + i] = memory_[buf + len - 1 - i];
+                            memory_[buf + len - 1 - i] = t;
+                        }
+                        break;
+                    }
+                    case Opcode::Memzero: {
+                        uint64_t buf = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint64_t len = static_cast<uint64_t>(readOperand(frame, instr.operands[1], instr.type).asInt128());
+                        memSetOp(buf, 0, len);
+                        break;
+                    }
+                    case Opcode::Memeq: {
+                        uint64_t a = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint64_t b = readOperand(frame, instr.operands[1], Type::Ptr).bits.ptr;
+                        uint64_t len = static_cast<uint64_t>(readOperand(frame, instr.operands[2], instr.type).asInt128());
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, memCmpOp(a, b, len) == 0 ? 1 : 0);
+                        break;
+                    }
+                    case Opcode::Memcount: {
+                        uint64_t buf = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint64_t len = static_cast<uint64_t>(readOperand(frame, instr.operands[1], instr.type).asInt128());
+                        uint8_t c = static_cast<uint8_t>(readOperand(frame, instr.operands[2], instr.type).asInt128() & 0xFF);
+                        checkRange(buf, len);
+                        uint64_t n = 0;
+                        for (uint64_t i = 0; i < len; ++i) {
+                            if (memory_[buf + i] == c) ++n;
+                        }
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, static_cast<Int128>(n));
+                        break;
+                    }
+                    case Opcode::Strlen:
+                    case Opcode::Strnlen: {
+                        uint64_t s = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint64_t cap = memory_.size();
+                        if (instr.opcode == Opcode::Strnlen) {
+                            uint64_t m = static_cast<uint64_t>(readOperand(frame, instr.operands[1], instr.type).asInt128());
+                            if (s + m < cap) cap = s + m;
+                        }
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, static_cast<Int128>(stringLength(s, cap)));
+                        break;
+                    }
+                    case Opcode::Strcmp:
+                    case Opcode::Strncmp:
+                    case Opcode::Strcasecmp: {
+                        uint64_t a = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint64_t b = readOperand(frame, instr.operands[1], Type::Ptr).bits.ptr;
+                        uint64_t n = (instr.opcode == Opcode::Strncmp)
+                                         ? static_cast<uint64_t>(readOperand(frame, instr.operands[2], instr.type).asInt128())
+                                         : memory_.size();
+                        bool fold = instr.opcode == Opcode::Strcasecmp;
+                        int r = 0;
+                        for (uint64_t i = 0; i < n; ++i) {
+                            checkRange(a + i, 1);
+                            checkRange(b + i, 1);
+                            int ca = memory_[a + i];
+                            int cb = memory_[b + i];
+                            if (fold) {
+                                if (ca >= 'A' && ca <= 'Z') ca += 32;
+                                if (cb >= 'A' && cb <= 'Z') cb += 32;
+                            }
+                            if (ca != cb) { r = ca < cb ? -1 : 1; break; }
+                            if (ca == 0) break;
+                        }
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, r);
+                        break;
+                    }
+                    case Opcode::Strcpy:
+                    case Opcode::Strncpy:
+                    case Opcode::Strcat:
+                    case Opcode::Strncat: {
+                        uint64_t dst = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint64_t src = readOperand(frame, instr.operands[1], Type::Ptr).bits.ptr;
+                        bool bounded = instr.opcode == Opcode::Strncpy || instr.opcode == Opcode::Strncat;
+                        uint64_t n = bounded
+                                         ? static_cast<uint64_t>(readOperand(frame, instr.operands[2], instr.type).asInt128())
+                                         : memory_.size();
+                        bool append = instr.opcode == Opcode::Strcat || instr.opcode == Opcode::Strncat;
+                        uint64_t at = dst + (append ? stringLength(dst, memory_.size()) : 0);
+                        uint64_t i = 0;
+                        for (; i < n; ++i) {
+                            checkRange(src + i, 1);
+                            checkRange(at + i, 1);
+                            uint8_t c = memory_[src + i];
+                            memory_[at + i] = c;
+                            if (c == 0) break;
+                        }
+                        if (i == n) {
+                            checkRange(at + i, 1);
+                            memory_[at + i] = 0;
+                        }
+                        break;
+                    }
+                    case Opcode::Strchr:
+                    case Opcode::Strrchr: {
+                        uint64_t s = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint8_t c = static_cast<uint8_t>(readOperand(frame, instr.operands[1], instr.type).asInt128() & 0xFF);
+                        uint64_t len = stringLength(s, memory_.size());
+                        uint64_t found = 0;
+                        bool ok = false;
+                        for (uint64_t i = 0; i <= len; ++i) {
+                            if (memory_[s + i] == c) {
+                                found = s + i;
+                                ok = true;
+                                if (instr.opcode == Opcode::Strchr) break;
+                            }
+                        }
+                        frame.reg(instr.dest) = makePtr(ok ? found : 0);
+                        break;
+                    }
+                    case Opcode::Strstr: {
+                        uint64_t h = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint64_t nd = readOperand(frame, instr.operands[1], Type::Ptr).bits.ptr;
+                        uint64_t hlen = stringLength(h, memory_.size());
+                        uint64_t nlen = stringLength(nd, memory_.size());
+                        uint64_t found = 0;
+                        bool ok = false;
+                        if (nlen == 0) {
+                            found = h;
+                            ok = true;
+                        } else if (nlen <= hlen) {
+                            for (uint64_t i = 0; i + nlen <= hlen; ++i) {
+                                if (std::memcmp(&memory_[0] + h + i, &memory_[0] + nd, nlen) == 0) {
+                                    found = h + i;
+                                    ok = true;
+                                    break;
+                                }
+                            }
+                        }
+                        frame.reg(instr.dest) = makePtr(ok ? found : 0);
+                        break;
+                    }
+                    case Opcode::Strspn:
+                    case Opcode::Strcspn:
+                    case Opcode::Strpbrk: {
+                        uint64_t s = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint64_t set = readOperand(frame, instr.operands[1], Type::Ptr).bits.ptr;
+                        uint64_t slen = stringLength(s, memory_.size());
+                        uint64_t setlen = stringLength(set, memory_.size());
+                        uint64_t i = 0;
+                        bool found = false;
+                        for (; i < slen; ++i) {
+                            bool inSet = false;
+                            for (uint64_t j = 0; j < setlen; ++j) {
+                                if (memory_[s + i] == memory_[set + j]) { inSet = true; break; }
+                            }
+                            if (instr.opcode == Opcode::Strspn) {
+                                if (!inSet) break;
+                            } else {
+                                if (inSet) { found = true; break; }
+                            }
+                        }
+                        if (instr.opcode == Opcode::Strpbrk) {
+                            frame.reg(instr.dest) = makePtr(found ? s + i : 0);
+                        } else {
+                            frame.reg(instr.dest) = Value::fromInt128(instr.type, static_cast<Int128>(i));
+                        }
+                        break;
+                    }
+                    case Opcode::Strrev:
+                    case Opcode::Strupper:
+                    case Opcode::Strlower: {
+                        uint64_t s = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint64_t len = stringLength(s, memory_.size());
+                        if (instr.opcode == Opcode::Strrev) {
+                            for (uint64_t i = 0; i * 2 + 1 < len; ++i) {
+                                uint8_t t = memory_[s + i];
+                                memory_[s + i] = memory_[s + len - 1 - i];
+                                memory_[s + len - 1 - i] = t;
+                            }
+                        } else {
+                            for (uint64_t i = 0; i < len; ++i) {
+                                uint8_t c = memory_[s + i];
+                                if (instr.opcode == Opcode::Strupper) {
+                                    if (c >= 'a' && c <= 'z') memory_[s + i] = static_cast<uint8_t>(c - 32);
+                                } else {
+                                    if (c >= 'A' && c <= 'Z') memory_[s + i] = static_cast<uint8_t>(c + 32);
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    case Opcode::Utf8Decode: {
+                        uint64_t p = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        checkRange(p, 1);
+                        uint32_t cp = 0;
+                        uint8_t c0 = memory_[p];
+                        int extra = 0;
+                        if (c0 < 0x80) { cp = c0; }
+                        else if ((c0 & 0xE0) == 0xC0) { cp = c0 & 0x1F; extra = 1; }
+                        else if ((c0 & 0xF0) == 0xE0) { cp = c0 & 0x0F; extra = 2; }
+                        else if ((c0 & 0xF8) == 0xF0) { cp = c0 & 0x07; extra = 3; }
+                        else throw RuntimeError("invalid utf-8 lead byte");
+                        checkRange(p, static_cast<uint64_t>(extra) + 1);
+                        for (int k = 1; k <= extra; ++k) {
+                            uint8_t cc = memory_[p + k];
+                            if ((cc & 0xC0) != 0x80) throw RuntimeError("invalid utf-8 continuation byte");
+                            cp = (cp << 6) | (cc & 0x3F);
+                        }
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, static_cast<Int128>(cp));
+                        break;
+                    }
+                    case Opcode::Utf8Encode: {
+                        uint64_t p = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint32_t cp = static_cast<uint32_t>(readOperand(frame, instr.operands[1], instr.type).asInt128());
+                        uint8_t buf[4];
+                        int n = 0;
+                        if (cp < 0x80) { buf[0] = static_cast<uint8_t>(cp); n = 1; }
+                        else if (cp < 0x800) {
+                            buf[0] = static_cast<uint8_t>(0xC0 | (cp >> 6));
+                            buf[1] = static_cast<uint8_t>(0x80 | (cp & 0x3F));
+                            n = 2;
+                        } else if (cp < 0x10000) {
+                            buf[0] = static_cast<uint8_t>(0xE0 | (cp >> 12));
+                            buf[1] = static_cast<uint8_t>(0x80 | ((cp >> 6) & 0x3F));
+                            buf[2] = static_cast<uint8_t>(0x80 | (cp & 0x3F));
+                            n = 3;
+                        } else {
+                            buf[0] = static_cast<uint8_t>(0xF0 | (cp >> 18));
+                            buf[1] = static_cast<uint8_t>(0x80 | ((cp >> 12) & 0x3F));
+                            buf[2] = static_cast<uint8_t>(0x80 | ((cp >> 6) & 0x3F));
+                            buf[3] = static_cast<uint8_t>(0x80 | (cp & 0x3F));
+                            n = 4;
+                        }
+                        checkRange(p, static_cast<uint64_t>(n));
+                        for (int k = 0; k < n; ++k) memory_[p + k] = buf[k];
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, n);
+                        break;
+                    }
+                    case Opcode::Utf8Len: {
+                        uint64_t p = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint64_t len = stringLength(p, memory_.size());
+                        uint64_t n = 0;
+                        for (uint64_t i = 0; i < len; ++i) {
+                            if ((memory_[p + i] & 0xC0) != 0x80) ++n;
+                        }
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, static_cast<Int128>(n));
+                        break;
+                    }
+                    case Opcode::Utf8Valid: {
+                        uint64_t p = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint64_t len = static_cast<uint64_t>(readOperand(frame, instr.operands[1], instr.type).asInt128());
+                        checkRange(p, len);
+                        bool ok = true;
+                        uint64_t i = 0;
+                        while (i < len) {
+                            uint8_t c0 = memory_[p + i];
+                            int extra = 0;
+                            if (c0 < 0x80) extra = 0;
+                            else if ((c0 & 0xE0) == 0xC0) extra = 1;
+                            else if ((c0 & 0xF0) == 0xE0) extra = 2;
+                            else if ((c0 & 0xF8) == 0xF0) extra = 3;
+                            else { ok = false; break; }
+                            if (i + static_cast<uint64_t>(extra) >= len) { ok = false; break; }
+                            for (int k = 1; k <= extra; ++k) {
+                                if ((memory_[p + i + k] & 0xC0) != 0x80) { ok = false; break; }
+                            }
+                            if (!ok) break;
+                            i += static_cast<uint64_t>(extra) + 1;
+                        }
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, ok ? 1 : 0);
+                        break;
+                    }
+                    case Opcode::Assert: {
+                        Value c = readOperand(frame, instr.operands[0], instr.type);
+                        if (c.asInt128() == 0) throw RuntimeError("assertion failed");
+                        break;
+                    }
+                    case Opcode::Expect:
+                    case Opcode::Freeze: {
+                        frame.reg(instr.dest) = readOperand(frame, instr.operands[0], instr.type);
+                        break;
+                    }
+                    case Opcode::Poison: {
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, 0);
+                        break;
+                    }
+                    case Opcode::Breakpoint:
+                    case Opcode::Assume:
+                    case Opcode::Prefetch:
+                    case Opcode::Hint:
+                    case Opcode::Dbgloc:
+                    case Opcode::Trace:
+                    case Opcode::Probe:
+                    case Opcode::Noopt:
+                    case Opcode::Sideeffect:
+                        break;
                     case Opcode::Syscall: {
                         int64_t sid = static_cast<int64_t>(readOperand(frame, instr.operands[0], Type::I64).asInt128());
                         int64_t a0 = instr.operands.size() > 1
@@ -1839,6 +2428,14 @@ private:
         std::memcpy(&v.bits, &stack_[0] + stackPointer_, sz);
         stackPointer_ += sz;
         return v;
+    }
+
+    uint64_t stringLength(uint64_t addr, uint64_t cap) {
+        if (cap > memory_.size()) cap = memory_.size();
+        for (uint64_t i = addr; i < cap; ++i) {
+            if (memory_[i] == 0) return i - addr;
+        }
+        throw RuntimeError("unterminated string at address " + toString(addr));
     }
 
     void freeAllocas(Frame& frame) {

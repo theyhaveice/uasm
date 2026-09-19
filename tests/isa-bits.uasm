@@ -1,0 +1,920 @@
+module isa_part3
+
+export func main() -> i32 {
+chk1:
+    mov.i32 r0, 27
+    mov.i32 r1, 21
+    bext.i32 r2, r0, r1
+    mov.i32 r50, 5
+    cmp.i32 r2, r50
+    bne bad1
+    jmp chk2
+bad1:
+    mov.i32 r51, 1
+    ret.i32 r51
+chk2:
+    mov.i32 r0, 5
+    mov.i32 r1, 21
+    bdep.i32 r2, r0, r1
+    mov.i32 r50, 17
+    cmp.i32 r2, r50
+    bne bad2
+    jmp chk3
+bad2:
+    mov.i32 r51, 2
+    ret.i32 r51
+chk3:
+    mov.i32 r0, 43981
+    mov.i64 r1, 4
+    mov.i64 r3, 8
+    bfextract.i32 r2, r0, r1, r3
+    mov.i32 r50, 188
+    cmp.i32 r2, r50
+    bne bad3
+    jmp chk4
+bad3:
+    mov.i32 r51, 3
+    ret.i32 r51
+chk4:
+    mov.i32 r0, 0
+    mov.i32 r4, 255
+    mov.i64 r1, 8
+    mov.i64 r3, 8
+    bfinsert.i32 r2, r0, r4, r1, r3
+    mov.i32 r50, 65280
+    cmp.i32 r2, r50
+    bne bad4
+    jmp chk5
+bad4:
+    mov.i32 r51, 4
+    ret.i32 r51
+chk5:
+    mov.i32 r0, 65535
+    mov.i64 r1, 4
+    mov.i64 r3, 8
+    bfclear.i32 r2, r0, r1, r3
+    mov.i32 r50, 61455
+    cmp.i32 r2, r50
+    bne bad5
+    jmp chk6
+bad5:
+    mov.i32 r51, 5
+    ret.i32 r51
+chk6:
+    mov.i32 r0, 0
+    mov.i64 r1, 4
+    mov.i64 r3, 8
+    bfset.i32 r2, r0, r1, r3
+    mov.i32 r50, 4080
+    cmp.i32 r2, r50
+    bne bad6
+    jmp chk7
+bad6:
+    mov.i32 r51, 6
+    ret.i32 r51
+chk7:
+    mov.i32 r0, 1
+    clrsb.i32 r2, r0
+    mov.i32 r50, 30
+    cmp.i32 r2, r50
+    bne bad7
+    jmp chk8
+bad7:
+    mov.i32 r51, 7
+    ret.i32 r51
+chk8:
+    mov.i32 r0, 12
+    blsi.i32 r2, r0
+    mov.i32 r50, 4
+    cmp.i32 r2, r50
+    bne bad8
+    jmp chk9
+bad8:
+    mov.i32 r51, 8
+    ret.i32 r51
+chk9:
+    mov.i32 r0, 12
+    blsr.i32 r2, r0
+    mov.i32 r50, 8
+    cmp.i32 r2, r50
+    bne bad9
+    jmp chk10
+bad9:
+    mov.i32 r51, 9
+    ret.i32 r51
+chk10:
+    mov.i32 r0, 12
+    blsmsk.i32 r2, r0
+    mov.i32 r50, 7
+    cmp.i32 r2, r50
+    bne bad10
+    jmp chk11
+bad10:
+    mov.i32 r51, 10
+    ret.i32 r51
+chk11:
+    mov.i32 r0, 5
+    gray.i32 r2, r0
+    mov.i32 r50, 7
+    cmp.i32 r2, r50
+    bne bad11
+    jmp chk12
+bad11:
+    mov.i32 r51, 11
+    ret.i32 r51
+chk12:
+    mov.i32 r0, 7
+    ungray.i32 r2, r0
+    mov.i32 r50, 5
+    cmp.i32 r2, r50
+    bne bad12
+    jmp chk13
+bad12:
+    mov.i32 r51, 12
+    ret.i32 r51
+chk13:
+    mov.i32 r0, 8
+    lowmask.i32 r2, r0
+    mov.i32 r50, 255
+    cmp.i32 r2, r50
+    bne bad13
+    jmp chk14
+bad13:
+    mov.i32 r51, 13
+    ret.i32 r51
+chk14:
+    mov.i32 r0, 8
+    himask.i32 r2, r0
+    mov.i32 r50, -16777216
+    cmp.i32 r2, r50
+    bne bad14
+    jmp chk15
+bad14:
+    mov.i32 r51, 14
+    ret.i32 r51
+chk15:
+    mov.i32 r0, 4660
+    bswap16.i32 r2, r0
+    mov.i32 r50, 13330
+    cmp.i32 r2, r50
+    bne bad15
+    jmp chk16
+bad15:
+    mov.i32 r51, 15
+    ret.i32 r51
+chk16:
+    mov.i32 r0, 305419896
+    bswap32.i32 r2, r0
+    mov.i32 r50, 2018915346
+    cmp.i32 r2, r50
+    bne bad16
+    jmp chk17
+bad16:
+    mov.i32 r51, 16
+    ret.i32 r51
+chk17:
+    mov.i32 r0, 305419896
+    nibbleswap.i32 r2, r0
+    mov.i32 r50, -2023406815
+    cmp.i32 r2, r50
+    bne bad17
+    jmp chk18
+bad17:
+    mov.i32 r51, 17
+    ret.i32 r51
+chk18:
+    mov.i32 r0, 15
+    bitinterleave.i32 r2, r0
+    mov.i32 r50, 85
+    cmp.i32 r2, r50
+    bne bad18
+    jmp chk19
+bad18:
+    mov.i32 r51, 18
+    ret.i32 r51
+chk19:
+    mov.i32 r0, 85
+    bitdeinterleave.i32 r2, r0
+    mov.i32 r50, 15
+    cmp.i32 r2, r50
+    bne bad19
+    jmp chk20
+bad19:
+    mov.i32 r51, 19
+    ret.i32 r51
+chk20:
+    mov.i32 r0, 255
+    zerocount.i32 r2, r0
+    mov.i32 r50, 24
+    cmp.i32 r2, r50
+    bne bad20
+    jmp chk21
+bad20:
+    mov.i32 r51, 20
+    ret.i32 r51
+chk21:
+    mov.i32 r0, 65280
+    mov.i32 r1, 255
+    mov.i32 r3, -252645136
+    bitselect.i32 r2, r0, r1, r3
+    mov.i32 r50, 61455
+    cmp.i32 r2, r50
+    bne bad21
+    jmp chk22
+bad21:
+    mov.i32 r51, 21
+    ret.i32 r51
+chk22:
+    mov.i32 r0, 255
+    mov.i32 r1, 8
+    sextbit.i32 r2, r0, r1
+    mov.i32 r50, -1
+    cmp.i32 r2, r50
+    bne bad22
+    jmp chk23
+bad22:
+    mov.i32 r51, 22
+    ret.i32 r51
+chk23:
+    mov.i32 r0, 511
+    mov.i32 r1, 8
+    zextbit.i32 r2, r0, r1
+    mov.i32 r50, 255
+    cmp.i32 r2, r50
+    bne bad23
+    jmp chk24
+bad23:
+    mov.i32 r51, 23
+    ret.i32 r51
+chk24:
+    mov.i32 r0, 128
+    hibit.i32 r2, r0
+    mov.i32 r50, 7
+    cmp.i32 r2, r50
+    bne bad24
+    jmp chk25
+bad24:
+    mov.i32 r51, 24
+    ret.i32 r51
+chk25:
+    mov.i32 r0, 128
+    lobit.i32 r2, r0
+    mov.i32 r50, 7
+    cmp.i32 r2, r50
+    bne bad25
+    jmp chk26
+bad25:
+    mov.i32 r51, 25
+    ret.i32 r51
+chk26:
+    mov.i32 r0, -1
+    msbmask.i32 r2, r0
+    mov.i32 r50, -1
+    cmp.i32 r2, r50
+    bne bad26
+    jmp chk27
+bad26:
+    mov.i32 r51, 26
+    ret.i32 r51
+chk27:
+    mov.i32 r0, 1
+    msbmask.i32 r2, r0
+    mov.i32 r50, 0
+    cmp.i32 r2, r50
+    bne bad27
+    jmp chk28
+bad27:
+    mov.i32 r51, 27
+    ret.i32 r51
+chk28:
+    mov.i32 r0, 305419896
+    mov.i32 r1, -1698898192
+    mov.i64 r3, 8
+    shld.i32 r2, r0, r1, r3
+    mov.i32 r50, 878082202
+    cmp.i32 r2, r50
+    bne bad28
+    jmp chk29
+bad28:
+    mov.i32 r51, 28
+    ret.i32 r51
+chk29:
+    mov.i32 r0, 305419896
+    mov.i32 r1, -1698898192
+    mov.i64 r3, 8
+    shrd.i32 r2, r0, r1, r3
+    mov.i32 r50, 2023406814
+    cmp.i32 r2, r50
+    bne bad29
+    jmp chk30
+bad29:
+    mov.i32 r51, 29
+    ret.i32 r51
+chk30:
+    mov.i32 r0, 1
+    bitrev8.i32 r2, r0
+    mov.i32 r50, 128
+    cmp.i32 r2, r50
+    bne bad30
+    jmp chk31
+bad30:
+    mov.i32 r51, 30
+    ret.i32 r51
+chk31:
+    mov.ptr r40, 6000
+    mov.i32 r41, 104
+    store.i8 r40, r41
+    mov.ptr r40, 6001
+    mov.i32 r41, 101
+    store.i8 r40, r41
+    mov.ptr r40, 6002
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6003
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6004
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6005
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r0, 6000
+    strlen.i64 r2, r0
+    mov.i64 r50, 5
+    cmp.i64 r2, r50
+    bne bad31
+    jmp chk32
+bad31:
+    mov.i32 r51, 31
+    ret.i32 r51
+chk32:
+    mov.ptr r40, 6000
+    mov.i32 r41, 104
+    store.i8 r40, r41
+    mov.ptr r40, 6001
+    mov.i32 r41, 101
+    store.i8 r40, r41
+    mov.ptr r40, 6002
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6003
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6004
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6005
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r0, 6000
+    strcmp.i32 r2, r0, r0
+    mov.i32 r50, 0
+    cmp.i32 r2, r50
+    bne bad32
+    jmp chk33
+bad32:
+    mov.i32 r51, 32
+    ret.i32 r51
+chk33:
+    mov.ptr r40, 6000
+    mov.i32 r41, 104
+    store.i8 r40, r41
+    mov.ptr r40, 6001
+    mov.i32 r41, 101
+    store.i8 r40, r41
+    mov.ptr r40, 6002
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6003
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6004
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6005
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r40, 6100
+    mov.i32 r41, 119
+    store.i8 r40, r41
+    mov.ptr r40, 6101
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6102
+    mov.i32 r41, 114
+    store.i8 r40, r41
+    mov.ptr r40, 6103
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6104
+    mov.i32 r41, 100
+    store.i8 r40, r41
+    mov.ptr r40, 6105
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r0, 6000
+    mov.ptr r1, 6100
+    strcmp.i32 r2, r0, r1
+    mov.i32 r50, -1
+    cmp.i32 r2, r50
+    bne bad33
+    jmp chk34
+bad33:
+    mov.i32 r51, 33
+    ret.i32 r51
+chk34:
+    mov.ptr r40, 6000
+    mov.i32 r41, 104
+    store.i8 r40, r41
+    mov.ptr r40, 6001
+    mov.i32 r41, 101
+    store.i8 r40, r41
+    mov.ptr r40, 6002
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6003
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6004
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6005
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r0, 6000
+    mov.i32 r1, 108
+    strchr.i64 r3, r0, r1
+    ptrtoint.i64 r2, r3
+    mov.i64 r50, 6002
+    cmp.i64 r2, r50
+    bne bad34
+    jmp chk35
+bad34:
+    mov.i32 r51, 34
+    ret.i32 r51
+chk35:
+    mov.ptr r40, 6000
+    mov.i32 r41, 104
+    store.i8 r40, r41
+    mov.ptr r40, 6001
+    mov.i32 r41, 101
+    store.i8 r40, r41
+    mov.ptr r40, 6002
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6003
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6004
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6005
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r0, 6000
+    mov.i32 r1, 108
+    strrchr.i64 r3, r0, r1
+    ptrtoint.i64 r2, r3
+    mov.i64 r50, 6003
+    cmp.i64 r2, r50
+    bne bad35
+    jmp chk36
+bad35:
+    mov.i32 r51, 35
+    ret.i32 r51
+chk36:
+    mov.ptr r40, 6000
+    mov.i32 r41, 104
+    store.i8 r40, r41
+    mov.ptr r40, 6001
+    mov.i32 r41, 101
+    store.i8 r40, r41
+    mov.ptr r40, 6002
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6003
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6004
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6005
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r40, 6200
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6201
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6202
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r0, 6000
+    mov.ptr r1, 6200
+    strstr.i64 r3, r0, r1
+    ptrtoint.i64 r2, r3
+    mov.i64 r50, 6003
+    cmp.i64 r2, r50
+    bne bad36
+    jmp chk37
+bad36:
+    mov.i32 r51, 36
+    ret.i32 r51
+chk37:
+    mov.ptr r40, 6000
+    mov.i32 r41, 104
+    store.i8 r40, r41
+    mov.ptr r40, 6001
+    mov.i32 r41, 101
+    store.i8 r40, r41
+    mov.ptr r40, 6002
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6003
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6004
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6005
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r0, 6000
+    mov.i64 r1, 5
+    mov.i64 r3, 111
+    memchr.i64 r4, r0, r1, r3
+    ptrtoint.i64 r2, r4
+    mov.i64 r50, 6004
+    cmp.i64 r2, r50
+    bne bad37
+    jmp chk38
+bad37:
+    mov.i32 r51, 37
+    ret.i32 r51
+chk38:
+    mov.ptr r40, 6000
+    mov.i32 r41, 104
+    store.i8 r40, r41
+    mov.ptr r40, 6001
+    mov.i32 r41, 101
+    store.i8 r40, r41
+    mov.ptr r40, 6002
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6003
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6004
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6005
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r0, 6000
+    mov.i64 r1, 5
+    mov.i64 r3, 108
+    memcount.i64 r2, r0, r1, r3
+    mov.i64 r50, 2
+    cmp.i64 r2, r50
+    bne bad38
+    jmp chk39
+bad38:
+    mov.i32 r51, 38
+    ret.i32 r51
+chk39:
+    mov.ptr r40, 6000
+    mov.i32 r41, 104
+    store.i8 r40, r41
+    mov.ptr r40, 6001
+    mov.i32 r41, 101
+    store.i8 r40, r41
+    mov.ptr r40, 6002
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6003
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6004
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6005
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r0, 6000
+    strupper.i64 r0
+    mov.i32 r1, 72
+    load.i8 r3, r0
+    convert.i32 r2, r3
+    mov.i32 r50, 72
+    cmp.i32 r2, r50
+    bne bad39
+    jmp chk40
+bad39:
+    mov.i32 r51, 39
+    ret.i32 r51
+chk40:
+    mov.ptr r40, 6000
+    mov.i32 r41, 104
+    store.i8 r40, r41
+    mov.ptr r40, 6001
+    mov.i32 r41, 101
+    store.i8 r40, r41
+    mov.ptr r40, 6002
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6003
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6004
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6005
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r0, 6000
+    strrev.i64 r0
+    load.i8 r3, r0
+    convert.i32 r2, r3
+    mov.i32 r50, 111
+    cmp.i32 r2, r50
+    bne bad40
+    jmp chk41
+bad40:
+    mov.i32 r51, 40
+    ret.i32 r51
+chk41:
+    mov.ptr r40, 6000
+    mov.i32 r41, 104
+    store.i8 r40, r41
+    mov.ptr r40, 6001
+    mov.i32 r41, 101
+    store.i8 r40, r41
+    mov.ptr r40, 6002
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6003
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6004
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6005
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r0, 6000
+    mov.i64 r1, 5
+    memrev.i64 r0, r1
+    load.i8 r3, r0
+    convert.i32 r2, r3
+    mov.i32 r50, 111
+    cmp.i32 r2, r50
+    bne bad41
+    jmp chk42
+bad41:
+    mov.i32 r51, 41
+    ret.i32 r51
+chk42:
+    mov.ptr r40, 6000
+    mov.i32 r41, 104
+    store.i8 r40, r41
+    mov.ptr r40, 6001
+    mov.i32 r41, 101
+    store.i8 r40, r41
+    mov.ptr r40, 6002
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6003
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6004
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6005
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r40, 6100
+    mov.i32 r41, 119
+    store.i8 r40, r41
+    mov.ptr r40, 6101
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6102
+    mov.i32 r41, 114
+    store.i8 r40, r41
+    mov.ptr r40, 6103
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6104
+    mov.i32 r41, 100
+    store.i8 r40, r41
+    mov.ptr r40, 6105
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r0, 6000
+    mov.ptr r1, 6100
+    mov.i64 r3, 5
+    memswap.i64 r0, r1, r3
+    load.i8 r4, r0
+    convert.i32 r2, r4
+    mov.i32 r50, 119
+    cmp.i32 r2, r50
+    bne bad42
+    jmp chk43
+bad42:
+    mov.i32 r51, 42
+    ret.i32 r51
+chk43:
+    mov.ptr r0, 6300
+    mov.i32 r1, 8364
+    utf8encode.i32 r2, r0, r1
+    mov.i32 r50, 3
+    cmp.i32 r2, r50
+    bne bad43
+    jmp chk44
+bad43:
+    mov.i32 r51, 43
+    ret.i32 r51
+chk44:
+    mov.ptr r0, 6300
+    mov.i32 r1, 8364
+    utf8encode.i32 r3, r0, r1
+    utf8decode.i32 r2, r0
+    mov.i32 r50, 8364
+    cmp.i32 r2, r50
+    bne bad44
+    jmp chk45
+bad44:
+    mov.i32 r51, 44
+    ret.i32 r51
+chk45:
+    mov.ptr r0, 6300
+    mov.i32 r1, 8364
+    utf8encode.i32 r3, r0, r1
+    mov.i64 r4, 3
+    utf8valid.i32 r2, r0, r4
+    mov.i32 r50, 1
+    cmp.i32 r2, r50
+    bne bad45
+    jmp chk46
+bad45:
+    mov.i32 r51, 45
+    ret.i32 r51
+chk46:
+    mov.ptr r40, 6000
+    mov.i32 r41, 104
+    store.i8 r40, r41
+    mov.ptr r40, 6001
+    mov.i32 r41, 101
+    store.i8 r40, r41
+    mov.ptr r40, 6002
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6003
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6004
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6005
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r0, 6000
+    mov.i64 r1, 5
+    memzero.i64 r0, r1
+    strlen.i64 r2, r0
+    mov.i64 r50, 0
+    cmp.i64 r2, r50
+    bne bad46
+    jmp chk47
+bad46:
+    mov.i32 r51, 46
+    ret.i32 r51
+chk47:
+    mov.ptr r40, 6000
+    mov.i32 r41, 104
+    store.i8 r40, r41
+    mov.ptr r40, 6001
+    mov.i32 r41, 101
+    store.i8 r40, r41
+    mov.ptr r40, 6002
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6003
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6004
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6005
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r0, 6000
+    mov.ptr r1, 6400
+    strcpy.i64 r1, r0
+    strlen.i64 r2, r1
+    mov.i64 r50, 5
+    cmp.i64 r2, r50
+    bne bad47
+    jmp chk48
+bad47:
+    mov.i32 r51, 47
+    ret.i32 r51
+chk48:
+    mov.ptr r40, 6000
+    mov.i32 r41, 104
+    store.i8 r40, r41
+    mov.ptr r40, 6001
+    mov.i32 r41, 101
+    store.i8 r40, r41
+    mov.ptr r40, 6002
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6003
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6004
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6005
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r40, 6100
+    mov.i32 r41, 119
+    store.i8 r40, r41
+    mov.ptr r40, 6101
+    mov.i32 r41, 111
+    store.i8 r40, r41
+    mov.ptr r40, 6102
+    mov.i32 r41, 114
+    store.i8 r40, r41
+    mov.ptr r40, 6103
+    mov.i32 r41, 108
+    store.i8 r40, r41
+    mov.ptr r40, 6104
+    mov.i32 r41, 100
+    store.i8 r40, r41
+    mov.ptr r40, 6105
+    mov.i32 r41, 0
+    store.i8 r40, r41
+    mov.ptr r0, 6000
+    mov.ptr r1, 6500
+    strcpy.i64 r1, r0
+    mov.ptr r3, 6100
+    strcat.i64 r1, r3
+    strlen.i64 r2, r1
+    mov.i64 r50, 10
+    cmp.i64 r2, r50
+    bne bad48
+    jmp chk49
+bad48:
+    mov.i32 r51, 48
+    ret.i32 r51
+chk49:
+    mov.i32 r0, 1
+    assert.i32 r0
+    mov.i32 r2, 1
+    mov.i32 r50, 1
+    cmp.i32 r2, r50
+    bne bad49
+    jmp chk50
+bad49:
+    mov.i32 r51, 49
+    ret.i32 r51
+chk50:
+    mov.i32 r0, 42
+    expect.i32 r2, r0
+    breakpoint
+    noopt
+    sideeffect
+    mov.i32 r50, 42
+    cmp.i32 r2, r50
+    bne bad50
+    jmp chk51
+bad50:
+    mov.i32 r51, 50
+    ret.i32 r51
+chk51:
+    mov.i32 r0, 7
+    freeze.i32 r2, r0
+    mov.i32 r50, 7
+    cmp.i32 r2, r50
+    bne bad51
+    jmp chk52
+bad51:
+    mov.i32 r51, 51
+    ret.i32 r51
+chk52:
+    poison.i32 r2
+    mov.i32 r50, 0
+    cmp.i32 r2, r50
+    bne bad52
+    jmp done
+bad52:
+    mov.i32 r51, 52
+    ret.i32 r51
+done:
+    mov.i32 r51, 0
+    ret.i32 r51
+}
