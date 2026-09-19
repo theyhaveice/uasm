@@ -4,95 +4,28 @@
 #include <string>
 #include <vector>
 
+#include "uasm/extensions.h"
 #include "uasm/types.h"
 
 namespace uasm {
 
+namespace OpFlag {
+enum Value {
+    None = 0,
+    Suffix = 1 << 0,
+    Suffix2 = 1 << 1,
+    Dest = 1 << 2,
+    Term = 1 << 3,
+    NoOps = 1 << 4
+};
+}
+
 namespace Opcode {
 enum Value {
-    Mov = 0,
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Cmp,
-    Beq,
-    Bne,
-    Blt,
-    Bgt,
-    Ble,
-    Bge,
-    Jmp,
-    Call,
-    Ret,
-    RetVoid,
-    Load,
-    Store,
-    And,
-    Or,
-    Xor,
-    Not,
-    Shl,
-    Shr,
-    Mod,
-    Neg,
-    Push,
-    Pop,
-    Convert,
-    Cast,
-
-    Alloc,
-    Free,
-    Realloc,
-    MemCpy,
-    MemSet,
-    MemMove,
-    MemCmp,
-
-    Sqrt,
-    Cbrt,
-    Floor,
-    Ceil,
-    Round,
-    Trunc,
-    Abs,
-    Min,
-    Max,
-    Pow,
-    Fma,
-    Sin,
-    Cos,
-    Tan,
-    Asin,
-    Acos,
-    Atan,
-    Atan2,
-    Sinh,
-    Cosh,
-    Tanh,
-    Log,
-    Log2,
-    Log10,
-    Exp,
-    Exp2,
-    Hypot,
-    Copysign,
-    Fmod,
-
-    Popcount,
-    Clz,
-    Ctz,
-    Bswap,
-    Rotl,
-    Rotr,
-    Bitset,
-    Bitclear,
-    Bittest,
-    Parity,
-    Ffs,
-    Bitreverse,
-
-    Syscall
+#define UASM_OP(name, mnemonic, ext, flags) name,
+#include "uasm/opcodes.def"
+#undef UASM_OP
+    OpcodeCount
 };
 }
 
@@ -112,12 +45,14 @@ struct Operand {
 struct Instruction {
     Opcode::Value opcode;
     Type::Value type;
+    Type::Value type2;
     bool hasDest;
     uint32_t dest;
     std::vector<Operand> operands;
     int line;
 
-    Instruction() : opcode(Opcode::Mov), type(Type::I32), hasDest(false), dest(0), line(0) {}
+    Instruction()
+        : opcode(Opcode::Mov), type(Type::I32), type2(Type::I32), hasDest(false), dest(0), line(0) {}
 };
 
 struct Block {

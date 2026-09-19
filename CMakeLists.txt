@@ -21,6 +21,8 @@ endif()
 
 add_library(uasm SHARED
   src/core/types.cpp
+  src/core/extensions.cpp
+  src/core/opcode_info.cpp
   src/core/value.cpp
   src/frontend/lexer.cpp
   src/frontend/parser.cpp

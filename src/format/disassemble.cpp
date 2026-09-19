@@ -1,5 +1,7 @@
 #include "uasm/disassemble.h"
 
+#include "uasm/opcode_info.h"
+
 #include <cctype>
 #include <sstream>
 
@@ -58,168 +60,6 @@ const char* operandKindName(Operand::Kind kind) {
     return "unknown";
 }
 
-const char* mnemonic(Opcode::Value op) {
-    switch (op) {
-        case Opcode::Mov: return "mov";
-        case Opcode::Add: return "add";
-        case Opcode::Sub: return "sub";
-        case Opcode::Mul: return "mul";
-        case Opcode::Div: return "div";
-        case Opcode::Cmp: return "cmp";
-        case Opcode::Beq: return "beq";
-        case Opcode::Bne: return "bne";
-        case Opcode::Blt: return "blt";
-        case Opcode::Bgt: return "bgt";
-        case Opcode::Ble: return "ble";
-        case Opcode::Bge: return "bge";
-        case Opcode::Jmp: return "jmp";
-        case Opcode::Call: return "call";
-        case Opcode::Ret: return "ret";
-        case Opcode::RetVoid: return "ret";
-        case Opcode::Load: return "load";
-        case Opcode::Store: return "store";
-        case Opcode::And: return "and";
-        case Opcode::Or: return "or";
-        case Opcode::Xor: return "xor";
-        case Opcode::Not: return "not";
-        case Opcode::Shl: return "shl";
-        case Opcode::Shr: return "shr";
-        case Opcode::Mod: return "mod";
-        case Opcode::Neg: return "neg";
-        case Opcode::Push: return "push";
-        case Opcode::Pop: return "pop";
-        case Opcode::Convert: return "convert";
-        case Opcode::Cast: return "cast";
-        case Opcode::Alloc: return "alloc";
-        case Opcode::Free: return "free";
-        case Opcode::Realloc: return "realloc";
-        case Opcode::MemCpy: return "memcpy";
-        case Opcode::MemSet: return "memset";
-        case Opcode::MemMove: return "memmove";
-        case Opcode::MemCmp: return "memcmp";
-        case Opcode::Sqrt: return "sqrt";
-        case Opcode::Cbrt: return "cbrt";
-        case Opcode::Floor: return "floor";
-        case Opcode::Ceil: return "ceil";
-        case Opcode::Round: return "round";
-        case Opcode::Trunc: return "trunc";
-        case Opcode::Abs: return "abs";
-        case Opcode::Min: return "min";
-        case Opcode::Max: return "max";
-        case Opcode::Pow: return "pow";
-        case Opcode::Fma: return "fma";
-        case Opcode::Sin: return "sin";
-        case Opcode::Cos: return "cos";
-        case Opcode::Tan: return "tan";
-        case Opcode::Asin: return "asin";
-        case Opcode::Acos: return "acos";
-        case Opcode::Atan: return "atan";
-        case Opcode::Atan2: return "atan2";
-        case Opcode::Sinh: return "sinh";
-        case Opcode::Cosh: return "cosh";
-        case Opcode::Tanh: return "tanh";
-        case Opcode::Log: return "log";
-        case Opcode::Log2: return "log2";
-        case Opcode::Log10: return "log10";
-        case Opcode::Exp: return "exp";
-        case Opcode::Exp2: return "exp2";
-        case Opcode::Hypot: return "hypot";
-        case Opcode::Copysign: return "copysign";
-        case Opcode::Fmod: return "fmod";
-        case Opcode::Popcount: return "popcount";
-        case Opcode::Clz: return "clz";
-        case Opcode::Ctz: return "ctz";
-        case Opcode::Bswap: return "bswap";
-        case Opcode::Rotl: return "rotl";
-        case Opcode::Rotr: return "rotr";
-        case Opcode::Bitset: return "bitset";
-        case Opcode::Bitclear: return "bitclear";
-        case Opcode::Bittest: return "bittest";
-        case Opcode::Parity: return "parity";
-        case Opcode::Ffs: return "ffs";
-        case Opcode::Bitreverse: return "bitreverse";
-        case Opcode::Syscall: return "syscall";
-    }
-    return "?";
-}
-
-bool hasTypeSuffix(Opcode::Value op) {
-    switch (op) {
-        case Opcode::Mov:
-        case Opcode::Add:
-        case Opcode::Sub:
-        case Opcode::Mul:
-        case Opcode::Div:
-        case Opcode::Cmp:
-        case Opcode::Ret:
-        case Opcode::Load:
-        case Opcode::Store:
-        case Opcode::And:
-        case Opcode::Or:
-        case Opcode::Xor:
-        case Opcode::Not:
-        case Opcode::Shl:
-        case Opcode::Shr:
-        case Opcode::Mod:
-        case Opcode::Neg:
-        case Opcode::Push:
-        case Opcode::Pop:
-        case Opcode::Convert:
-        case Opcode::Cast:
-        case Opcode::Alloc:
-        case Opcode::Free:
-        case Opcode::Realloc:
-        case Opcode::MemCpy:
-        case Opcode::MemSet:
-        case Opcode::MemMove:
-        case Opcode::MemCmp:
-        case Opcode::Sqrt:
-        case Opcode::Cbrt:
-        case Opcode::Floor:
-        case Opcode::Ceil:
-        case Opcode::Round:
-        case Opcode::Trunc:
-        case Opcode::Abs:
-        case Opcode::Min:
-        case Opcode::Max:
-        case Opcode::Pow:
-        case Opcode::Fma:
-        case Opcode::Sin:
-        case Opcode::Cos:
-        case Opcode::Tan:
-        case Opcode::Asin:
-        case Opcode::Acos:
-        case Opcode::Atan:
-        case Opcode::Atan2:
-        case Opcode::Sinh:
-        case Opcode::Cosh:
-        case Opcode::Tanh:
-        case Opcode::Log:
-        case Opcode::Log2:
-        case Opcode::Log10:
-        case Opcode::Exp:
-        case Opcode::Exp2:
-        case Opcode::Hypot:
-        case Opcode::Copysign:
-        case Opcode::Fmod:
-        case Opcode::Popcount:
-        case Opcode::Clz:
-        case Opcode::Ctz:
-        case Opcode::Bswap:
-        case Opcode::Rotl:
-        case Opcode::Rotr:
-        case Opcode::Bitset:
-        case Opcode::Bitclear:
-        case Opcode::Bittest:
-        case Opcode::Parity:
-        case Opcode::Ffs:
-        case Opcode::Bitreverse:
-        case Opcode::Syscall:
-            return true;
-        default:
-            return false;
-    }
-}
 
 void writeOperand(std::ostringstream& out, const Operand& op) {
     switch (op.kind) {
@@ -240,8 +80,9 @@ void writeOperand(std::ostringstream& out, const Operand& op) {
 }
 
 void writeInstruction(std::ostringstream& out, const Instruction& instr) {
-    out << "    " << mnemonic(instr.opcode);
-    if (hasTypeSuffix(instr.opcode)) out << "." << typeName(instr.type);
+    out << "    " << opcodeName(instr.opcode);
+    if (takesTypeSuffix(instr.opcode)) out << "." << typeName(instr.type);
+    if (takesSecondTypeSuffix(instr.opcode)) out << "." << typeName(instr.type2);
     out << " ";
 
     bool firstOperand = true;
@@ -320,9 +161,12 @@ void writeOperandJson(std::ostringstream& out, const Operand& op) {
 
 void writeInstructionJson(std::ostringstream& out, const Instruction& instr, const std::string& indent) {
     out << indent << "{\n";
-    out << indent << "  \"opcode\": \"" << mnemonic(instr.opcode) << "\",\n";
-    if (hasTypeSuffix(instr.opcode)) {
+    out << indent << "  \"opcode\": \"" << opcodeName(instr.opcode) << "\",\n";
+    if (takesTypeSuffix(instr.opcode)) {
         out << indent << "  \"type\": \"" << typeName(instr.type) << "\",\n";
+    }
+    if (takesSecondTypeSuffix(instr.opcode)) {
+        out << indent << "  \"type2\": \"" << typeName(instr.type2) << "\",\n";
     }
     out << indent << "  \"dest\": " << (instr.hasDest ? ("\"" + toRegisterString(instr.dest) + "\"") : "null")
         << ",\n";
@@ -433,9 +277,12 @@ std::string toYaml(const Program& program) {
             out << "\n";
             for (size_t ii = 0; ii < block.instructions.size(); ++ii) {
                 const Instruction& instr = block.instructions[ii];
-                out << "          - opcode: " << mnemonic(instr.opcode) << "\n";
-                if (hasTypeSuffix(instr.opcode)) {
+                out << "          - opcode: " << opcodeName(instr.opcode) << "\n";
+                if (takesTypeSuffix(instr.opcode)) {
                     out << "            type: " << typeName(instr.type) << "\n";
+                }
+                if (takesSecondTypeSuffix(instr.opcode)) {
+                    out << "            type2: " << typeName(instr.type2) << "\n";
                 }
                 out << "            dest: " << (instr.hasDest ? toRegisterString(instr.dest) : std::string("null"))
                     << "\n";

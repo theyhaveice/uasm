@@ -14,6 +14,10 @@ namespace {
 class Writer {
 public:
     void u8(uint8_t v) { buf_.push_back(v); }
+    void u16(uint16_t v) {
+        buf_.push_back(static_cast<uint8_t>(v & 0xFF));
+        buf_.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    }
     void u32(uint32_t v) {
         for (int i = 0; i < 4; ++i) buf_.push_back(static_cast<uint8_t>((v >> (i * 8)) & 0xFF));
     }
@@ -59,8 +63,9 @@ void writeOperand(Writer& w, const Operand& op) {
 }
 
 void writeInstruction(Writer& w, const Instruction& instr) {
-    w.u8(static_cast<uint8_t>(instr.opcode));
+    w.u16(static_cast<uint16_t>(instr.opcode));
     w.u8(static_cast<uint8_t>(instr.type));
+    w.u8(static_cast<uint8_t>(instr.type2));
     w.u8(instr.hasDest ? 1 : 0);
     w.u32(instr.dest);
     w.u8(static_cast<uint8_t>(instr.operands.size()));
@@ -85,11 +90,20 @@ void writeFunction(Writer& w, const Function& fn) {
 
 class Reader {
 public:
-    Reader(const uint8_t* data, size_t size) : data_(data), size_(size), pos_(0) {}
+    Reader(const uint8_t* data, size_t size, int version)
+        : data_(data), size_(size), pos_(0), version_(version) {}
+
+    int version() const { return version_; }
 
     uint8_t u8() {
         need(1);
         return data_[pos_++];
+    }
+    uint16_t u16() {
+        need(2);
+        uint16_t v = static_cast<uint16_t>(data_[pos_] | (data_[pos_ + 1] << 8));
+        pos_ += 2;
+        return v;
     }
     uint32_t u32() {
         need(4);
@@ -127,6 +141,7 @@ private:
     const uint8_t* data_;
     size_t size_;
     size_t pos_;
+    int version_;
 };
 
 Operand readOperand(Reader& r) {
@@ -157,8 +172,15 @@ Operand readOperand(Reader& r) {
 
 Instruction readInstruction(Reader& r) {
     Instruction instr;
-    instr.opcode = static_cast<Opcode::Value>(r.u8());
-    instr.type = static_cast<Type::Value>(r.u8());
+    if (r.version() >= 1) {
+        instr.opcode = static_cast<Opcode::Value>(r.u16());
+        instr.type = static_cast<Type::Value>(r.u8());
+        instr.type2 = static_cast<Type::Value>(r.u8());
+    } else {
+        instr.opcode = static_cast<Opcode::Value>(r.u8());
+        instr.type = static_cast<Type::Value>(r.u8());
+        instr.type2 = instr.type;
+    }
     instr.hasDest = r.u8() != 0;
     instr.dest = r.u32();
     uint8_t count = r.u8();
@@ -199,7 +221,7 @@ void writeUo(const Program& program, const std::string& path) {
 
     std::ofstream out(path.c_str(), std::ios::binary);
     if (!out) throw SerializeError("could not open '" + path + "' for writing");
-    out.write(kMagic, sizeof(kMagic));
+    out.write(kMagicV1, sizeof(kMagicV1));
     out.write(reinterpret_cast<const char*>(&w.data()[0]), static_cast<std::streamsize>(w.data().size()));
     if (!out) throw SerializeError("failed writing '" + path + "'");
 }
@@ -209,11 +231,17 @@ Program readUo(const std::string& path) {
     if (!in) throw SerializeError("could not open '" + path + "' for reading");
     std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 
-    if (bytes.size() < sizeof(kMagic) || std::memcmp(&bytes[0], kMagic, sizeof(kMagic)) != 0) {
+    int version = -1;
+    if (bytes.size() >= sizeof(kMagicV1) && std::memcmp(&bytes[0], kMagicV1, sizeof(kMagicV1)) == 0) {
+        version = 1;
+    } else if (bytes.size() >= sizeof(kMagic) && std::memcmp(&bytes[0], kMagic, sizeof(kMagic)) == 0) {
+        version = 0;
+    }
+    if (version < 0) {
         throw SerializeError("'" + path + "' is not a valid .uo file (bad magic)");
     }
 
-    Reader r(&bytes[0] + sizeof(kMagic), bytes.size() - sizeof(kMagic));
+    Reader r(&bytes[0] + sizeof(kMagic), bytes.size() - sizeof(kMagic), version);
     Program program;
     uint32_t functionCount = r.u32();
     for (uint32_t i = 0; i < functionCount; ++i) program.functions.push_back(readFunction(r));

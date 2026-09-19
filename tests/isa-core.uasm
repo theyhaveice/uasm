@@ -1,0 +1,591 @@
+module isa_part1
+
+export func main() -> i32 {
+chk1:
+    mov.i32 r0, -1
+    mov.i32 r1, 16
+    udiv.i32 r2, r0, r1
+    mov.i32 r8, 268435455
+    cmp.i32 r2, r8
+    bne bad1
+    jmp chk2
+bad1:
+    mov.i32 r9, 1
+    ret.i32 r9
+chk2:
+    mov.i32 r0, -1
+    mov.i32 r1, 10
+    umod.i32 r2, r0, r1
+    mov.i32 r8, 5
+    cmp.i32 r2, r8
+    bne bad2
+    jmp chk3
+bad2:
+    mov.i32 r9, 2
+    ret.i32 r9
+chk3:
+    mov.i32 r0, -16
+    mov.i32 r1, 2
+    sar.i32 r2, r0, r1
+    mov.i32 r8, -4
+    cmp.i32 r2, r8
+    bne bad3
+    jmp chk4
+bad3:
+    mov.i32 r9, 3
+    ret.i32 r9
+chk4:
+    mov.i32 r0, 65536
+    mov.i32 r1, 65536
+    mulhi.i32 r2, r0, r1
+    mov.i32 r8, 1
+    cmp.i32 r2, r8
+    bne bad4
+    jmp chk5
+bad4:
+    mov.i32 r9, 4
+    ret.i32 r9
+chk5:
+    mov.i32 r0, -1
+    mov.i32 r1, -1
+    umulhi.i32 r2, r0, r1
+    mov.i32 r8, -2
+    cmp.i32 r2, r8
+    bne bad5
+    jmp chk6
+bad5:
+    mov.i32 r9, 5
+    ret.i32 r9
+chk6:
+    mov.i32 r0, 100000
+    mov.i32 r1, 100000
+    mulwide.i32.i64 r2, r0, r1
+    mov.i64 r8, 10000000000
+    cmp.i64 r2, r8
+    bne bad6
+    jmp chk7
+bad6:
+    mov.i32 r9, 6
+    ret.i32 r9
+chk7:
+    mov.i32 r0, -1
+    mov.i32 r1, 5
+    umin.i32 r2, r0, r1
+    mov.i32 r8, 5
+    cmp.i32 r2, r8
+    bne bad7
+    jmp chk8
+bad7:
+    mov.i32 r9, 7
+    ret.i32 r9
+chk8:
+    mov.i32 r0, -1
+    mov.i32 r1, 5
+    umax.i32 r2, r0, r1
+    mov.i32 r8, -1
+    cmp.i32 r2, r8
+    bne bad8
+    jmp chk9
+bad8:
+    mov.i32 r9, 8
+    ret.i32 r9
+chk9:
+    mov.i32 r0, 3
+    mov.i32 r1, 10
+    absdiff.i32 r2, r0, r1
+    mov.i32 r8, 7
+    cmp.i32 r2, r8
+    bne bad9
+    jmp chk10
+bad9:
+    mov.i32 r9, 9
+    ret.i32 r9
+chk10:
+    mov.i32 r0, 41
+    inc.i32 r2, r0
+    mov.i32 r8, 42
+    cmp.i32 r2, r8
+    bne bad10
+    jmp chk11
+bad10:
+    mov.i32 r9, 10
+    ret.i32 r9
+chk11:
+    mov.i32 r0, 43
+    dec.i32 r2, r0
+    mov.i32 r8, 42
+    cmp.i32 r2, r8
+    bne bad11
+    jmp chk12
+bad11:
+    mov.i32 r9, 11
+    ret.i32 r9
+chk12:
+    mov.i32 r0, -7
+    signum.i32 r2, r0
+    mov.i32 r8, -1
+    cmp.i32 r2, r8
+    bne bad12
+    jmp chk13
+bad12:
+    mov.i32 r9, 12
+    ret.i32 r9
+chk13:
+    mov.i32 r0, 7
+    sqr.i32 r2, r0
+    mov.i32 r8, 49
+    cmp.i32 r2, r8
+    bne bad13
+    jmp chk14
+bad13:
+    mov.i32 r9, 13
+    ret.i32 r9
+chk14:
+    mov.i32 r0, 50
+    isqrt.i32 r2, r0
+    mov.i32 r8, 7
+    cmp.i32 r2, r8
+    bne bad14
+    jmp chk15
+bad14:
+    mov.i32 r9, 14
+    ret.i32 r9
+chk15:
+    mov.i32 r0, 1000
+    ilog2.i32 r2, r0
+    mov.i32 r8, 9
+    cmp.i32 r2, r8
+    bne bad15
+    jmp chk16
+bad15:
+    mov.i32 r9, 15
+    ret.i32 r9
+chk16:
+    mov.i32 r0, 1000
+    ilog10.i32 r2, r0
+    mov.i32 r8, 3
+    cmp.i32 r2, r8
+    bne bad16
+    jmp chk17
+bad16:
+    mov.i32 r9, 16
+    ret.i32 r9
+chk17:
+    mov.i32 r0, 64
+    ispow2.i32 r2, r0
+    mov.i32 r8, 1
+    cmp.i32 r2, r8
+    bne bad17
+    jmp chk18
+bad17:
+    mov.i32 r9, 17
+    ret.i32 r9
+chk18:
+    mov.i32 r0, 100
+    nextpow2.i32 r2, r0
+    mov.i32 r8, 128
+    cmp.i32 r2, r8
+    bne bad18
+    jmp chk19
+bad18:
+    mov.i32 r9, 18
+    ret.i32 r9
+chk19:
+    mov.i32 r0, 100
+    prevpow2.i32 r2, r0
+    mov.i32 r8, 64
+    cmp.i32 r2, r8
+    bne bad19
+    jmp chk20
+bad19:
+    mov.i32 r9, 19
+    ret.i32 r9
+chk20:
+    mov.i32 r0, 12
+    mov.i32 r1, 18
+    gcd.i32 r2, r0, r1
+    mov.i32 r8, 6
+    cmp.i32 r2, r8
+    bne bad20
+    jmp chk21
+bad20:
+    mov.i32 r9, 20
+    ret.i32 r9
+chk21:
+    mov.i32 r0, 4
+    mov.i32 r1, 6
+    lcm.i32 r2, r0, r1
+    mov.i32 r8, 12
+    cmp.i32 r2, r8
+    bne bad21
+    jmp chk22
+bad21:
+    mov.i32 r9, 21
+    ret.i32 r9
+chk22:
+    mov.i32 r0, 7
+    mov.i32 r1, 2
+    divceil.i32 r2, r0, r1
+    mov.i32 r8, 4
+    cmp.i32 r2, r8
+    bne bad22
+    jmp chk23
+bad22:
+    mov.i32 r9, 22
+    ret.i32 r9
+chk23:
+    mov.i32 r0, -7
+    mov.i32 r1, 2
+    divfloor.i32 r2, r0, r1
+    mov.i32 r8, -4
+    cmp.i32 r2, r8
+    bne bad23
+    jmp chk24
+bad23:
+    mov.i32 r9, 23
+    ret.i32 r9
+chk24:
+    mov.i32 r0, -7
+    mov.i32 r1, 2
+    diveuclid.i32 r2, r0, r1
+    mov.i32 r8, -4
+    cmp.i32 r2, r8
+    bne bad24
+    jmp chk25
+bad24:
+    mov.i32 r9, 24
+    ret.i32 r9
+chk25:
+    mov.i32 r0, -7
+    mov.i32 r1, 2
+    modeuclid.i32 r2, r0, r1
+    mov.i32 r8, 1
+    cmp.i32 r2, r8
+    bne bad25
+    jmp chk26
+bad25:
+    mov.i32 r9, 25
+    ret.i32 r9
+chk26:
+    mov.i32 r0, 13
+    mov.i32 r1, 8
+    alignup.i32 r2, r0, r1
+    mov.i32 r8, 16
+    cmp.i32 r2, r8
+    bne bad26
+    jmp chk27
+bad26:
+    mov.i32 r9, 26
+    ret.i32 r9
+chk27:
+    mov.i32 r0, 13
+    mov.i32 r1, 8
+    aligndown.i32 r2, r0, r1
+    mov.i32 r8, 8
+    cmp.i32 r2, r8
+    bne bad27
+    jmp chk28
+bad27:
+    mov.i32 r9, 27
+    ret.i32 r9
+chk28:
+    mov.i32 r0, 12
+    mov.i32 r1, 10
+    nand.i32 r2, r0, r1
+    mov.i32 r8, -9
+    cmp.i32 r2, r8
+    bne bad28
+    jmp chk29
+bad28:
+    mov.i32 r9, 28
+    ret.i32 r9
+chk29:
+    mov.i32 r0, 12
+    mov.i32 r1, 10
+    nor.i32 r2, r0, r1
+    mov.i32 r8, -15
+    cmp.i32 r2, r8
+    bne bad29
+    jmp chk30
+bad29:
+    mov.i32 r9, 29
+    ret.i32 r9
+chk30:
+    mov.i32 r0, 12
+    mov.i32 r1, 10
+    xnor.i32 r2, r0, r1
+    mov.i32 r8, -7
+    cmp.i32 r2, r8
+    bne bad30
+    jmp chk31
+bad30:
+    mov.i32 r9, 30
+    ret.i32 r9
+chk31:
+    mov.i32 r0, 12
+    mov.i32 r1, 10
+    andnot.i32 r2, r0, r1
+    mov.i32 r8, 4
+    cmp.i32 r2, r8
+    bne bad31
+    jmp chk32
+bad31:
+    mov.i32 r9, 31
+    ret.i32 r9
+chk32:
+    mov.i32 r0, 12
+    mov.i32 r1, 10
+    ornot.i32 r2, r0, r1
+    mov.i32 r8, -3
+    cmp.i32 r2, r8
+    bne bad32
+    jmp chk33
+bad32:
+    mov.i32 r9, 32
+    ret.i32 r9
+chk33:
+    mov.i32 r0, 7
+    mov.i32 r1, 10
+    avg.i32 r2, r0, r1
+    mov.i32 r8, 8
+    cmp.i32 r2, r8
+    bne bad33
+    jmp chk34
+bad33:
+    mov.i32 r9, 33
+    ret.i32 r9
+chk34:
+    mov.i32 r0, 7
+    mov.i32 r1, 10
+    uavg.i32 r2, r0, r1
+    mov.i32 r8, 8
+    cmp.i32 r2, r8
+    bne bad34
+    jmp chk35
+bad34:
+    mov.i32 r9, 34
+    ret.i32 r9
+chk35:
+    mov.i32 r0, 3
+    mov.i32 r1, 4
+    powi.i32 r2, r0, r1
+    mov.i32 r8, 81
+    cmp.i32 r2, r8
+    bne bad35
+    jmp chk36
+bad35:
+    mov.i32 r9, 35
+    ret.i32 r9
+chk36:
+    mov.i32 r0, 3
+    mov.i32 r1, 4
+    mov.i32 r3, 5
+    mla.i32 r2, r0, r1, r3
+    mov.i32 r8, 17
+    cmp.i32 r2, r8
+    bne bad36
+    jmp chk37
+bad36:
+    mov.i32 r9, 36
+    ret.i32 r9
+chk37:
+    mov.i32 r0, 3
+    mov.i32 r1, 4
+    mov.i32 r3, 20
+    mls.i32 r2, r0, r1, r3
+    mov.i32 r8, 8
+    cmp.i32 r2, r8
+    bne bad37
+    jmp chk38
+bad37:
+    mov.i32 r9, 37
+    ret.i32 r9
+chk38:
+    mov.i32 r0, 100
+    mov.i32 r1, 0
+    mov.i32 r3, 50
+    clamp.i32 r2, r0, r1, r3
+    mov.i32 r8, 50
+    cmp.i32 r2, r8
+    bne bad38
+    jmp chk39
+bad38:
+    mov.i32 r9, 38
+    ret.i32 r9
+chk39:
+    mov.i32 r0, -1
+    mov.i32 r1, 0
+    mov.i32 r3, 50
+    uclamp.i32 r2, r0, r1, r3
+    mov.i32 r8, 50
+    cmp.i32 r2, r8
+    bne bad39
+    jmp chk40
+bad39:
+    mov.i32 r9, 39
+    ret.i32 r9
+chk40:
+    mov.i8 r0, 100
+    mov.i8 r1, 100
+    addsat.i8 r2, r0, r1
+    mov.i8 r8, 127
+    cmp.i8 r2, r8
+    bne bad40
+    jmp chk41
+bad40:
+    mov.i32 r9, 40
+    ret.i32 r9
+chk41:
+    mov.i8 r0, -100
+    mov.i8 r1, 100
+    subsat.i8 r2, r0, r1
+    mov.i8 r8, -128
+    cmp.i8 r2, r8
+    bne bad41
+    jmp chk42
+bad41:
+    mov.i32 r9, 41
+    ret.i32 r9
+chk42:
+    mov.i8 r0, 100
+    mov.i8 r1, 100
+    mulsat.i8 r2, r0, r1
+    mov.i8 r8, 127
+    cmp.i8 r2, r8
+    bne bad42
+    jmp chk43
+bad42:
+    mov.i32 r9, 42
+    ret.i32 r9
+chk43:
+    mov.i8 r0, -128
+    negsat.i8 r2, r0
+    mov.i8 r8, 127
+    cmp.i8 r2, r8
+    bne bad43
+    jmp chk44
+bad43:
+    mov.i32 r9, 43
+    ret.i32 r9
+chk44:
+    mov.i8 r0, 200
+    mov.i8 r1, 100
+    uaddsat.i8 r2, r0, r1
+    mov.i8 r8, -1
+    cmp.i8 r2, r8
+    bne bad44
+    jmp chk45
+bad44:
+    mov.i32 r9, 44
+    ret.i32 r9
+chk45:
+    mov.i8 r0, 5
+    mov.i8 r1, 10
+    usubsat.i8 r2, r0, r1
+    mov.i8 r8, 0
+    cmp.i8 r2, r8
+    bne bad45
+    jmp chk46
+bad45:
+    mov.i32 r9, 45
+    ret.i32 r9
+chk46:
+    mov.i32 r0, 2147483647
+    mov.i32 r1, 1
+    addo.i32 r3, r0, r1
+    seto.i32 r2
+    mov.i32 r8, 1
+    cmp.i32 r2, r8
+    bne bad46
+    jmp chk47
+bad46:
+    mov.i32 r9, 46
+    ret.i32 r9
+chk47:
+    clro
+    mov.i32 r0, 1
+    mov.i32 r1, 1
+    addo.i32 r3, r0, r1
+    seto.i32 r2
+    mov.i32 r8, 0
+    cmp.i32 r2, r8
+    bne bad47
+    jmp chk48
+bad47:
+    mov.i32 r9, 47
+    ret.i32 r9
+chk48:
+    mov.i8 r0, -1
+    sext.i8.i32 r2, r0
+    mov.i32 r8, -1
+    cmp.i32 r2, r8
+    bne bad48
+    jmp chk49
+bad48:
+    mov.i32 r9, 48
+    ret.i32 r9
+chk49:
+    mov.i8 r0, -1
+    zext.i8.i32 r2, r0
+    mov.i32 r8, 255
+    cmp.i32 r2, r8
+    bne bad49
+    jmp chk50
+bad49:
+    mov.i32 r9, 49
+    ret.i32 r9
+chk50:
+    mov.i32 r0, 300
+    itrunc.i32.i8 r2, r0
+    mov.i8 r8, 44
+    cmp.i8 r2, r8
+    bne bad50
+    jmp chk51
+bad50:
+    mov.i32 r9, 50
+    ret.i32 r9
+chk51:
+    mov.i32 r0, -5
+    sitofp.i32.f64 r1, r0
+    fptosi.f64.i32 r2, r1
+    mov.i32 r8, -5
+    cmp.i32 r2, r8
+    bne bad51
+    jmp chk52
+bad51:
+    mov.i32 r9, 51
+    ret.i32 r9
+chk52:
+    mov.f32 r0, 1.0
+    bitconv.f32.i32 r2, r0
+    mov.i32 r8, 1065353216
+    cmp.i32 r2, r8
+    bne bad52
+    jmp chk53
+bad52:
+    mov.i32 r9, 52
+    ret.i32 r9
+chk53:
+    mov.i32 r0, 255
+    uitofp.i32.f64 r1, r0
+    fptoui.f64.i32 r2, r1
+    mov.i32 r8, 255
+    cmp.i32 r2, r8
+    bne bad53
+    jmp ucmpchk
+bad53:
+    mov.i32 r9, 53
+    ret.i32 r9
+ucmpchk:
+    mov.i32 r0, -1
+    mov.i32 r1, 5
+    ucmp.i32 r0, r1
+    bgt done
+    jmp bad54
+bad54:
+    mov.i32 r9, 54
+    ret.i32 r9
+done:
+    mov.i32 r9, 0
+    ret.i32 r9
+}

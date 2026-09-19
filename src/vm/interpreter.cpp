@@ -3,6 +3,7 @@
 #include "syscall_platform.h"
 
 #include "uasm/compat.h"
+#include "uasm/opcode_info.h"
 
 #include <cmath>
 #include <cstring>
@@ -34,8 +35,10 @@ std::string toString(T v) {
 struct Frame {
     std::vector<Value> regs;
     int cmpFlag;
+    bool overflowFlag;
+    bool carryFlag;
 
-    Frame() : cmpFlag(0) {}
+    Frame() : cmpFlag(0), overflowFlag(false), carryFlag(false) {}
 
     Value& reg(uint32_t idx) {
         if (idx >= regs.size()) regs.resize(idx + 1);
@@ -317,6 +320,376 @@ Value bitIndexOp(Opcode::Value op, Type::Value type, const Value& a, const Value
     }
 }
 
+Int128 signedMinOfWidth(size_t bits) {
+    if (bits >= 128) return static_cast<Int128>(static_cast<UInt128>(1) << 127);
+    return -(static_cast<Int128>(1) << (bits - 1));
+}
+
+Int128 signedMaxOfWidth(size_t bits) {
+    if (bits >= 128) return static_cast<Int128>((~static_cast<UInt128>(0)) >> 1);
+    return (static_cast<Int128>(1) << (bits - 1)) - 1;
+}
+
+UInt128 unsignedMaxOfWidth(size_t bits) {
+    if (bits >= 128) return ~static_cast<UInt128>(0);
+    return (static_cast<UInt128>(1) << bits) - 1;
+}
+
+UInt128 unsignedOf(const Value& v, Type::Value type) {
+    return maskToWidth(static_cast<UInt128>(v.asInt128()), bitWidth(type));
+}
+
+void requireInt(Type::Value type, const char* what) {
+    if (isFloatType(type)) throw RuntimeError(std::string(what) + " requires an integer type");
+}
+
+Int128 ipow(Int128 base, Int128 exp) {
+    if (exp < 0) throw RuntimeError("powi exponent must be non-negative");
+    Int128 r = 1;
+    while (exp > 0) {
+        if (exp & 1) r *= base;
+        base *= base;
+        exp >>= 1;
+    }
+    return r;
+}
+
+UInt128 uisqrt(UInt128 n) {
+    if (n == 0) return 0;
+    UInt128 x = n;
+    UInt128 y = (x + 1) / 2;
+    while (y < x) {
+        x = y;
+        y = (x + n / x) / 2;
+    }
+    return x;
+}
+
+int ulog2(UInt128 v) {
+    int r = -1;
+    while (v > 0) {
+        ++r;
+        v >>= 1;
+    }
+    return r;
+}
+
+int ulog10(UInt128 v) {
+    int r = -1;
+    while (v > 0) {
+        ++r;
+        v /= 10;
+    }
+    return r;
+}
+
+UInt128 nextPow2(UInt128 v) {
+    if (v <= 1) return 1;
+    UInt128 r = 1;
+    while (r < v) r <<= 1;
+    return r;
+}
+
+UInt128 prevPow2(UInt128 v) {
+    if (v == 0) return 0;
+    UInt128 r = 1;
+    while ((r << 1) != 0 && (r << 1) <= v) r <<= 1;
+    return r;
+}
+
+Int128 floorDiv(Int128 a, Int128 b) {
+    if (b == 0) throw RuntimeError("division by zero");
+    Int128 q = a / b;
+    if ((a % b != 0) && ((a < 0) != (b < 0))) --q;
+    return q;
+}
+
+Int128 ceilDiv(Int128 a, Int128 b) {
+    if (b == 0) throw RuntimeError("division by zero");
+    Int128 q = a / b;
+    if ((a % b != 0) && ((a < 0) == (b < 0))) ++q;
+    return q;
+}
+
+Int128 euclidDiv(Int128 a, Int128 b) {
+    if (b == 0) throw RuntimeError("division by zero");
+    Int128 q = a / b;
+    if (a % b < 0) q += (b > 0) ? -1 : 1;
+    return q;
+}
+
+Int128 euclidMod(Int128 a, Int128 b) {
+    if (b == 0) throw RuntimeError("modulo by zero");
+    Int128 m = a % b;
+    if (m < 0) m += (b < 0) ? -b : b;
+    return m;
+}
+
+Value intUnaryExt(Opcode::Value op, Type::Value type, const Value& a) {
+    requireInt(type, "this operation");
+    size_t bits = bitWidth(type);
+    Int128 x = a.asInt128();
+    UInt128 u = unsignedOf(a, type);
+    switch (op) {
+        case Opcode::Inc: return Value::fromInt128(type, x + 1);
+        case Opcode::Dec: return Value::fromInt128(type, x - 1);
+        case Opcode::Signum: return Value::fromInt128(type, x > 0 ? 1 : (x < 0 ? -1 : 0));
+        case Opcode::Sqr: return Value::fromInt128(type, x * x);
+        case Opcode::Isqrt: {
+            if (x < 0) throw RuntimeError("isqrt of a negative value");
+            return Value::fromInt128(type, static_cast<Int128>(uisqrt(static_cast<UInt128>(x))));
+        }
+        case Opcode::Ilog2: {
+            if (u == 0) throw RuntimeError("ilog2 of zero");
+            return Value::fromInt128(type, ulog2(u));
+        }
+        case Opcode::Ilog10: {
+            if (u == 0) throw RuntimeError("ilog10 of zero");
+            return Value::fromInt128(type, ulog10(u));
+        }
+        case Opcode::Ispow2: return Value::fromInt128(type, (u != 0 && (u & (u - 1)) == 0) ? 1 : 0);
+        case Opcode::Nextpow2: return Value::fromInt128(type, static_cast<Int128>(nextPow2(u)));
+        case Opcode::Prevpow2: return Value::fromInt128(type, static_cast<Int128>(prevPow2(u)));
+        case Opcode::Negsat: {
+            Int128 lo = signedMinOfWidth(bits);
+            if (x == lo) return Value::fromInt128(type, signedMaxOfWidth(bits));
+            return Value::fromInt128(type, -x);
+        }
+        default: throw RuntimeError("not a unary integer opcode");
+    }
+}
+
+Value intBinaryExt(Opcode::Value op, Type::Value type, const Value& a, const Value& b) {
+    requireInt(type, "this operation");
+    size_t bits = bitWidth(type);
+    Int128 x = a.asInt128();
+    Int128 y = b.asInt128();
+    UInt128 ux = unsignedOf(a, type);
+    UInt128 uy = unsignedOf(b, type);
+    switch (op) {
+        case Opcode::Udiv:
+            if (uy == 0) throw RuntimeError("division by zero");
+            return Value::fromInt128(type, static_cast<Int128>(ux / uy));
+        case Opcode::Umod:
+            if (uy == 0) throw RuntimeError("modulo by zero");
+            return Value::fromInt128(type, static_cast<Int128>(ux % uy));
+        case Opcode::Sar: {
+            if (y < 0 || static_cast<size_t>(y) >= bits) throw RuntimeError("shift amount out of range");
+            return Value::fromInt128(type, x >> static_cast<int>(y));
+        }
+        case Opcode::Mulhi: {
+            if (bits > 64) throw RuntimeError("mulhi is not defined for 128-bit types");
+            return Value::fromInt128(type, (x * y) >> static_cast<int>(bits));
+        }
+        case Opcode::Umulhi: {
+            if (bits > 64) throw RuntimeError("umulhi is not defined for 128-bit types");
+            return Value::fromInt128(type, static_cast<Int128>((ux * uy) >> static_cast<int>(bits)));
+        }
+        case Opcode::Umin: return Value::fromInt128(type, static_cast<Int128>(ux < uy ? ux : uy));
+        case Opcode::Umax: return Value::fromInt128(type, static_cast<Int128>(ux > uy ? ux : uy));
+        case Opcode::Absdiff: return Value::fromInt128(type, x > y ? x - y : y - x);
+        case Opcode::Uabsdiff: return Value::fromInt128(type, static_cast<Int128>(ux > uy ? ux - uy : uy - ux));
+        case Opcode::Avg: return Value::fromInt128(type, floorDiv(x + y, 2));
+        case Opcode::Uavg: return Value::fromInt128(type, static_cast<Int128>((ux & uy) + ((ux ^ uy) >> 1)));
+        case Opcode::Nand: return Value::fromInt128(type, ~(x & y));
+        case Opcode::Nor: return Value::fromInt128(type, ~(x | y));
+        case Opcode::Xnor: return Value::fromInt128(type, ~(x ^ y));
+        case Opcode::Andnot: return Value::fromInt128(type, x & ~y);
+        case Opcode::Ornot: return Value::fromInt128(type, x | ~y);
+        case Opcode::Powi: return Value::fromInt128(type, ipow(x, y));
+        case Opcode::Gcd: {
+            UInt128 p = ux, q = uy;
+            while (q != 0) {
+                UInt128 t = p % q;
+                p = q;
+                q = t;
+            }
+            return Value::fromInt128(type, static_cast<Int128>(p));
+        }
+        case Opcode::Lcm: {
+            if (ux == 0 || uy == 0) return Value::fromInt128(type, 0);
+            UInt128 p = ux, q = uy;
+            while (q != 0) {
+                UInt128 t = p % q;
+                p = q;
+                q = t;
+            }
+            return Value::fromInt128(type, static_cast<Int128>((ux / p) * uy));
+        }
+        case Opcode::Divceil: return Value::fromInt128(type, ceilDiv(x, y));
+        case Opcode::Divfloor: return Value::fromInt128(type, floorDiv(x, y));
+        case Opcode::Diveuclid: return Value::fromInt128(type, euclidDiv(x, y));
+        case Opcode::Modeuclid: return Value::fromInt128(type, euclidMod(x, y));
+        case Opcode::Alignup: {
+            if (uy == 0) throw RuntimeError("alignup to zero");
+            return Value::fromInt128(type, static_cast<Int128>(((ux + uy - 1) / uy) * uy));
+        }
+        case Opcode::Aligndown: {
+            if (uy == 0) throw RuntimeError("aligndown to zero");
+            return Value::fromInt128(type, static_cast<Int128>((ux / uy) * uy));
+        }
+        default: throw RuntimeError("not a binary integer opcode");
+    }
+}
+
+Value saturatingOp(Opcode::Value op, Type::Value type, const Value& a, const Value& b) {
+    requireInt(type, "saturating arithmetic");
+    size_t bits = bitWidth(type);
+    Int128 lo = signedMinOfWidth(bits);
+    Int128 hi = signedMaxOfWidth(bits);
+    UInt128 umax = unsignedMaxOfWidth(bits);
+    Int128 x = a.asInt128();
+    Int128 y = b.asInt128();
+    UInt128 ux = unsignedOf(a, type);
+    UInt128 uy = unsignedOf(b, type);
+
+    switch (op) {
+        case Opcode::Addsat: {
+            Int128 r = x + y;
+            if (r > hi) r = hi;
+            if (r < lo) r = lo;
+            return Value::fromInt128(type, r);
+        }
+        case Opcode::Subsat: {
+            Int128 r = x - y;
+            if (r > hi) r = hi;
+            if (r < lo) r = lo;
+            return Value::fromInt128(type, r);
+        }
+        case Opcode::Mulsat: {
+            if (bits > 64) throw RuntimeError("mulsat is not defined for 128-bit types");
+            Int128 r = x * y;
+            if (r > hi) r = hi;
+            if (r < lo) r = lo;
+            return Value::fromInt128(type, r);
+        }
+        case Opcode::Shlsat: {
+            if (y < 0 || static_cast<size_t>(y) >= bits) throw RuntimeError("shift amount out of range");
+            Int128 r = x << static_cast<int>(y);
+            if (r > hi) r = hi;
+            if (r < lo) r = lo;
+            return Value::fromInt128(type, r);
+        }
+        case Opcode::Uaddsat: {
+            UInt128 r = ux + uy;
+            if (r > umax || r < ux) r = umax;
+            return Value::fromInt128(type, static_cast<Int128>(r));
+        }
+        case Opcode::Usubsat: return Value::fromInt128(type, static_cast<Int128>(ux < uy ? 0 : ux - uy));
+        case Opcode::Umulsat: {
+            if (bits > 64) throw RuntimeError("umulsat is not defined for 128-bit types");
+            UInt128 r = ux * uy;
+            if (r > umax) r = umax;
+            return Value::fromInt128(type, static_cast<Int128>(r));
+        }
+        default: throw RuntimeError("not a saturating opcode");
+    }
+}
+
+bool computeWithOverflow(Opcode::Value op, Type::Value type, const Value& a, const Value& b, Int128& result) {
+    size_t bits = bitWidth(type);
+    Int128 lo = signedMinOfWidth(bits);
+    Int128 hi = signedMaxOfWidth(bits);
+    UInt128 umax = unsignedMaxOfWidth(bits);
+    Int128 x = a.asInt128();
+    Int128 y = b.asInt128();
+    UInt128 ux = unsignedOf(a, type);
+    UInt128 uy = unsignedOf(b, type);
+
+    switch (op) {
+        case Opcode::Addo:
+        case Opcode::Addchk: {
+            Int128 r = x + y;
+            result = r;
+            return r < lo || r > hi;
+        }
+        case Opcode::Subo:
+        case Opcode::Subchk: {
+            Int128 r = x - y;
+            result = r;
+            return r < lo || r > hi;
+        }
+        case Opcode::Mulo:
+        case Opcode::Mulchk: {
+            if (bits > 64) throw RuntimeError("checked multiply is not defined for 128-bit types");
+            Int128 r = x * y;
+            result = r;
+            return r < lo || r > hi;
+        }
+        case Opcode::Shlo: {
+            if (y < 0 || static_cast<size_t>(y) >= bits) throw RuntimeError("shift amount out of range");
+            Int128 r = x << static_cast<int>(y);
+            result = r;
+            return r < lo || r > hi;
+        }
+        case Opcode::Nego: {
+            result = -x;
+            return x == lo;
+        }
+        case Opcode::Uaddo:
+        case Opcode::Uaddchk: {
+            UInt128 r = ux + uy;
+            result = static_cast<Int128>(r);
+            return r > umax || r < ux;
+        }
+        case Opcode::Usubo:
+        case Opcode::Usubchk: {
+            result = static_cast<Int128>(ux - uy);
+            return ux < uy;
+        }
+        case Opcode::Umulo:
+        case Opcode::Umulchk: {
+            if (bits > 64) throw RuntimeError("checked multiply is not defined for 128-bit types");
+            UInt128 r = ux * uy;
+            result = static_cast<Int128>(r);
+            return r > umax;
+        }
+        default: throw RuntimeError("not a checked-arithmetic opcode");
+    }
+}
+
+Value convertOp(Opcode::Value op, Type::Value from, Type::Value to, const Value& a) {
+    size_t fromBits = bitWidth(from);
+    switch (op) {
+        case Opcode::Sext: {
+            UInt128 raw = maskToWidth(static_cast<UInt128>(a.asInt128()), fromBits);
+            Int128 v = static_cast<Int128>(raw);
+            if (fromBits < 128 && (raw >> (fromBits - 1)) & 1) {
+                v = static_cast<Int128>(raw | ~unsignedMaxOfWidth(fromBits));
+            }
+            return Value::fromInt128(to, v);
+        }
+        case Opcode::Zext:
+        case Opcode::Itrunc:
+            return Value::fromInt128(to, static_cast<Int128>(maskToWidth(static_cast<UInt128>(a.asInt128()), fromBits)));
+        case Opcode::Fpext:
+        case Opcode::Fptrunc:
+            if (!isFloatType(from) || !isFloatType(to)) throw RuntimeError("fpext/fptrunc require float types");
+            return Value::fromDouble(to, a.asDouble());
+        case Opcode::Fptosi:
+            if (!isFloatType(from)) throw RuntimeError("fptosi source must be a float type");
+            return Value::fromInt128(to, static_cast<Int128>(a.asDouble()));
+        case Opcode::Fptoui: {
+            if (!isFloatType(from)) throw RuntimeError("fptoui source must be a float type");
+            double d = a.asDouble();
+            if (d < 0.0) d = 0.0;
+            return Value::fromInt128(to, static_cast<Int128>(static_cast<UInt128>(d)));
+        }
+        case Opcode::Sitofp:
+            if (!isFloatType(to)) throw RuntimeError("sitofp destination must be a float type");
+            return Value::fromDouble(to, static_cast<double>(a.asInt128()));
+        case Opcode::Uitofp:
+            if (!isFloatType(to)) throw RuntimeError("uitofp destination must be a float type");
+            return Value::fromDouble(to, static_cast<double>(unsignedOf(a, from)));
+        case Opcode::Bitconv: {
+            Value src = a;
+            src.type = from;
+            return bitcast(to, src);
+        }
+        default: throw RuntimeError("not a conversion opcode");
+    }
+}
+
 const size_t kMemorySize = 1u << 20;
 
 const size_t kStackSize = 1u << 16;
@@ -360,6 +733,8 @@ public:
             for (size_t ii = 0; ii < block.instructions.size(); ++ii) {
                 const Instruction& instr = block.instructions[ii];
                 switch (instr.opcode) {
+                    case Opcode::OpcodeCount:
+                        throw RuntimeError("invalid opcode in instruction stream");
                     case Opcode::Mov: {
                         frame.reg(instr.dest) = readOperand(frame, instr.operands[0], instr.type);
                         break;
@@ -600,6 +975,213 @@ public:
                         Value a = readOperand(frame, instr.operands[0], instr.type);
                         Value idx = readOperand(frame, instr.operands[1], instr.type);
                         frame.reg(instr.dest) = bitIndexOp(instr.opcode, instr.type, a, idx);
+                        break;
+                    }
+                    case Opcode::Udiv:
+                    case Opcode::Umod:
+                    case Opcode::Sar:
+                    case Opcode::Mulhi:
+                    case Opcode::Umulhi:
+                    case Opcode::Umin:
+                    case Opcode::Umax:
+                    case Opcode::Absdiff:
+                    case Opcode::Uabsdiff:
+                    case Opcode::Avg:
+                    case Opcode::Uavg:
+                    case Opcode::Nand:
+                    case Opcode::Nor:
+                    case Opcode::Xnor:
+                    case Opcode::Andnot:
+                    case Opcode::Ornot:
+                    case Opcode::Powi:
+                    case Opcode::Gcd:
+                    case Opcode::Lcm:
+                    case Opcode::Divceil:
+                    case Opcode::Divfloor:
+                    case Opcode::Diveuclid:
+                    case Opcode::Modeuclid:
+                    case Opcode::Alignup:
+                    case Opcode::Aligndown: {
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        Value b = readOperand(frame, instr.operands[1], instr.type);
+                        frame.reg(instr.dest) = intBinaryExt(instr.opcode, instr.type, a, b);
+                        break;
+                    }
+                    case Opcode::Inc:
+                    case Opcode::Dec:
+                    case Opcode::Signum:
+                    case Opcode::Sqr:
+                    case Opcode::Isqrt:
+                    case Opcode::Ilog2:
+                    case Opcode::Ilog10:
+                    case Opcode::Ispow2:
+                    case Opcode::Nextpow2:
+                    case Opcode::Prevpow2:
+                    case Opcode::Negsat: {
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        frame.reg(instr.dest) = intUnaryExt(instr.opcode, instr.type, a);
+                        break;
+                    }
+                    case Opcode::Addc:
+                    case Opcode::Subb: {
+                        requireInt(instr.type, "addc/subb");
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        Value b = readOperand(frame, instr.operands[1], instr.type);
+                        UInt128 ux = unsignedOf(a, instr.type);
+                        UInt128 uy = unsignedOf(b, instr.type);
+                        UInt128 c = frame.carryFlag ? 1 : 0;
+                        UInt128 umax = unsignedMaxOfWidth(bitWidth(instr.type));
+                        UInt128 r;
+                        if (instr.opcode == Opcode::Addc) {
+                            r = ux + uy + c;
+                            frame.carryFlag = (r > umax) || (r < ux);
+                        } else {
+                            r = ux - uy - c;
+                            frame.carryFlag = ux < (uy + c);
+                        }
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, static_cast<Int128>(r));
+                        break;
+                    }
+                    case Opcode::Mulwide:
+                    case Opcode::Umulwide: {
+                        requireInt(instr.type, "mulwide");
+                        if (bitWidth(instr.type) > 64) throw RuntimeError("mulwide is not defined for 128-bit types");
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        Value b = readOperand(frame, instr.operands[1], instr.type);
+                        Int128 r;
+                        if (instr.opcode == Opcode::Mulwide) {
+                            r = a.asInt128() * b.asInt128();
+                        } else {
+                            r = static_cast<Int128>(unsignedOf(a, instr.type) * unsignedOf(b, instr.type));
+                        }
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type2, r);
+                        break;
+                    }
+                    case Opcode::Ucmp: {
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        Value b = readOperand(frame, instr.operands[1], instr.type);
+                        UInt128 ux = unsignedOf(a, instr.type);
+                        UInt128 uy = unsignedOf(b, instr.type);
+                        frame.cmpFlag = ux < uy ? -1 : (ux > uy ? 1 : 0);
+                        break;
+                    }
+                    case Opcode::Clamp:
+                    case Opcode::Uclamp: {
+                        requireInt(instr.type, "clamp");
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        Value lo = readOperand(frame, instr.operands[1], instr.type);
+                        Value hi = readOperand(frame, instr.operands[2], instr.type);
+                        if (instr.opcode == Opcode::Clamp) {
+                            Int128 x = a.asInt128();
+                            Int128 l = lo.asInt128();
+                            Int128 h = hi.asInt128();
+                            frame.reg(instr.dest) = Value::fromInt128(instr.type, x < l ? l : (x > h ? h : x));
+                        } else {
+                            UInt128 x = unsignedOf(a, instr.type);
+                            UInt128 l = unsignedOf(lo, instr.type);
+                            UInt128 h = unsignedOf(hi, instr.type);
+                            frame.reg(instr.dest) =
+                                Value::fromInt128(instr.type, static_cast<Int128>(x < l ? l : (x > h ? h : x)));
+                        }
+                        break;
+                    }
+                    case Opcode::Mla:
+                    case Opcode::Mls: {
+                        requireInt(instr.type, "mla/mls");
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        Value b = readOperand(frame, instr.operands[1], instr.type);
+                        Value c = readOperand(frame, instr.operands[2], instr.type);
+                        Int128 prod = a.asInt128() * b.asInt128();
+                        Int128 r = (instr.opcode == Opcode::Mla) ? (prod + c.asInt128()) : (c.asInt128() - prod);
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, r);
+                        break;
+                    }
+                    case Opcode::Addsat:
+                    case Opcode::Subsat:
+                    case Opcode::Mulsat:
+                    case Opcode::Shlsat:
+                    case Opcode::Uaddsat:
+                    case Opcode::Usubsat:
+                    case Opcode::Umulsat: {
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        Value b = readOperand(frame, instr.operands[1], instr.type);
+                        frame.reg(instr.dest) = saturatingOp(instr.opcode, instr.type, a, b);
+                        break;
+                    }
+                    case Opcode::Addo:
+                    case Opcode::Subo:
+                    case Opcode::Mulo:
+                    case Opcode::Shlo:
+                    case Opcode::Uaddo:
+                    case Opcode::Usubo:
+                    case Opcode::Umulo: {
+                        requireInt(instr.type, "checked arithmetic");
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        Value b = readOperand(frame, instr.operands[1], instr.type);
+                        Int128 r = 0;
+                        frame.overflowFlag = computeWithOverflow(instr.opcode, instr.type, a, b, r);
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, r);
+                        break;
+                    }
+                    case Opcode::Nego: {
+                        requireInt(instr.type, "checked arithmetic");
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        Value zero = Value::fromInt128(instr.type, 0);
+                        Int128 r = 0;
+                        frame.overflowFlag = computeWithOverflow(instr.opcode, instr.type, a, zero, r);
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, r);
+                        break;
+                    }
+                    case Opcode::Addchk:
+                    case Opcode::Subchk:
+                    case Opcode::Mulchk:
+                    case Opcode::Uaddchk:
+                    case Opcode::Usubchk:
+                    case Opcode::Umulchk: {
+                        requireInt(instr.type, "checked arithmetic");
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        Value b = readOperand(frame, instr.operands[1], instr.type);
+                        Int128 r = 0;
+                        if (computeWithOverflow(instr.opcode, instr.type, a, b, r)) {
+                            throw RuntimeError(std::string(opcodeName(instr.opcode)) + " overflowed");
+                        }
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, r);
+                        break;
+                    }
+                    case Opcode::Divchk: {
+                        requireInt(instr.type, "divchk");
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        Value b = readOperand(frame, instr.operands[1], instr.type);
+                        Int128 x = a.asInt128();
+                        Int128 y = b.asInt128();
+                        if (y == 0) throw RuntimeError("division by zero");
+                        if (x == signedMinOfWidth(bitWidth(instr.type)) && y == -1) {
+                            throw RuntimeError("divchk overflowed");
+                        }
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, x / y);
+                        break;
+                    }
+                    case Opcode::Seto: {
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, frame.overflowFlag ? 1 : 0);
+                        break;
+                    }
+                    case Opcode::Clro: {
+                        frame.overflowFlag = false;
+                        frame.carryFlag = false;
+                        break;
+                    }
+                    case Opcode::Sext:
+                    case Opcode::Zext:
+                    case Opcode::Itrunc:
+                    case Opcode::Fpext:
+                    case Opcode::Fptrunc:
+                    case Opcode::Fptosi:
+                    case Opcode::Fptoui:
+                    case Opcode::Sitofp:
+                    case Opcode::Uitofp:
+                    case Opcode::Bitconv: {
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        frame.reg(instr.dest) = convertOp(instr.opcode, instr.type, instr.type2, a);
                         break;
                     }
                     case Opcode::Syscall: {

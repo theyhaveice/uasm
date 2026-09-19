@@ -10,6 +10,8 @@ namespace uasm {
 
 const char kMagic[6] = {'U', 'A', 'S', 'M', '!', '0'};
 
+const char kMagicV1[6] = {'U', 'A', 'S', 'M', '!', '1'};
+
 struct SerializeError {
     std::string message;
     explicit SerializeError(const std::string& m) : message(m) {}
