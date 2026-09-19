@@ -11,6 +11,16 @@ namespace uasm {
 
 namespace {
 
+std::string toDecimal(uint32_t v) {
+    if (v == 0) return "0";
+    std::string s;
+    while (v > 0) {
+        s.insert(s.begin(), static_cast<char>('0' + (v % 10)));
+        v /= 10;
+    }
+    return s;
+}
+
 class Writer {
 public:
     void u8(uint8_t v) { buf_.push_back(v); }
@@ -215,13 +225,15 @@ Function readFunction(Reader& r) {
 
 void writeUo(const Program& program, const std::string& path) {
     Writer w;
+    w.u32(kUoVersionSentinel);
+    w.u32(kUoVersion);
     w.u32(static_cast<uint32_t>(program.functions.size()));
     for (size_t i = 0; i < program.functions.size(); ++i) writeFunction(w, program.functions[i]);
     w.u32(program.entryIndex);
 
     std::ofstream out(path.c_str(), std::ios::binary);
     if (!out) throw SerializeError("could not open '" + path + "' for writing");
-    out.write(kMagicV1, sizeof(kMagicV1));
+    out.write(kMagic, sizeof(kMagic));
     out.write(reinterpret_cast<const char*>(&w.data()[0]), static_cast<std::streamsize>(w.data().size()));
     if (!out) throw SerializeError("failed writing '" + path + "'");
 }
@@ -231,17 +243,31 @@ Program readUo(const std::string& path) {
     if (!in) throw SerializeError("could not open '" + path + "' for reading");
     std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 
-    int version = -1;
-    if (bytes.size() >= sizeof(kMagicV1) && std::memcmp(&bytes[0], kMagicV1, sizeof(kMagicV1)) == 0) {
-        version = 1;
-    } else if (bytes.size() >= sizeof(kMagic) && std::memcmp(&bytes[0], kMagic, sizeof(kMagic)) == 0) {
-        version = 0;
-    }
-    if (version < 0) {
+    if (bytes.size() < sizeof(kMagic) || std::memcmp(&bytes[0], kMagic, sizeof(kMagic)) != 0) {
+        if (bytes.size() >= sizeof(kLibMagic) && std::memcmp(&bytes[0], kLibMagic, sizeof(kLibMagic)) == 0) {
+            throw SerializeError("'" + path + "' is a .ulib archive, not a .uo object");
+        }
         throw SerializeError("'" + path + "' is not a valid .uo file (bad magic)");
     }
 
-    Reader r(&bytes[0] + sizeof(kMagic), bytes.size() - sizeof(kMagic), version);
+    size_t offset = sizeof(kMagic);
+    int version = 0;
+    if (bytes.size() >= offset + 8) {
+        uint32_t first = 0;
+        for (int i = 0; i < 4; ++i) first |= static_cast<uint32_t>(bytes[offset + i]) << (i * 8);
+        if (first == kUoVersionSentinel) {
+            uint32_t v = 0;
+            for (int i = 0; i < 4; ++i) v |= static_cast<uint32_t>(bytes[offset + 4 + i]) << (i * 8);
+            if (v > kUoVersion) {
+                throw SerializeError("'" + path + "' was written by a newer uasm (.uo version " + toDecimal(v) +
+                                      ", this build supports " + toDecimal(kUoVersion) + ")");
+            }
+            version = static_cast<int>(v);
+            offset += 8;
+        }
+    }
+
+    Reader r(&bytes[0] + offset, bytes.size() - offset, version);
     Program program;
     uint32_t functionCount = r.u32();
     for (uint32_t i = 0; i < functionCount; ++i) program.functions.push_back(readFunction(r));

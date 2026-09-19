@@ -10,7 +10,11 @@ namespace uasm {
 
 const char kMagic[6] = {'U', 'A', 'S', 'M', '!', '0'};
 
-const char kMagicV1[6] = {'U', 'A', 'S', 'M', '!', '1'};
+const char kLibMagic[6] = {'U', 'A', 'S', 'M', '!', '1'};
+
+const uint32_t kUoVersionSentinel = 0xFFFFFFFFu;
+
+const uint32_t kUoVersion = 1;
 
 struct SerializeError {
     std::string message;
