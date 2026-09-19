@@ -86,6 +86,25 @@ void writeInstruction(std::ostringstream& out, const Instruction& instr) {
     out << " ";
 
     bool firstOperand = true;
+    if (instr.opcode == Opcode::Call) {
+        if (!instr.operands.empty()) {
+            writeOperand(out, instr.operands[0]);
+            firstOperand = false;
+        }
+        if (instr.hasDest) {
+            if (!firstOperand) out << ", ";
+            out << "r" << instr.dest;
+            firstOperand = false;
+        }
+        for (size_t i = 1; i < instr.operands.size(); ++i) {
+            if (!firstOperand) out << ", ";
+            firstOperand = false;
+            writeOperand(out, instr.operands[i]);
+        }
+        out << "\n";
+        return;
+    }
+
     if (instr.hasDest) {
         out << "r" << instr.dest;
         firstOperand = false;

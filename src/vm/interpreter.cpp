@@ -37,8 +37,12 @@ struct Frame {
     int cmpFlag;
     bool overflowFlag;
     bool carryFlag;
+    uint64_t framePointer;
+    uint64_t enterSize;
+    size_t pc;
+    std::vector<uint64_t> allocas;
 
-    Frame() : cmpFlag(0), overflowFlag(false), carryFlag(false) {}
+    Frame() : cmpFlag(0), overflowFlag(false), carryFlag(false), framePointer(0), enterSize(0), pc(0) {}
 
     Value& reg(uint32_t idx) {
         if (idx >= regs.size()) regs.resize(idx + 1);
@@ -648,6 +652,186 @@ bool computeWithOverflow(Opcode::Value op, Type::Value type, const Value& a, con
     }
 }
 
+const double kPi = 3.14159265358979323846;
+
+Value makeBool(bool b) { return Value::fromInt128(Type::I32, b ? 1 : 0); }
+
+Value makePtr(uint64_t addr) {
+    Value v;
+    v.type = Type::Ptr;
+    v.bits.ptr = addr;
+    return v;
+}
+
+void requireFloat(Type::Value type, const char* what) {
+    if (!isFloatType(type)) throw RuntimeError(std::string(what) + " requires a float type (f32/f64)");
+}
+
+double roundEven(double x) {
+    double r = std::floor(x + 0.5);
+    if (r - x == 0.5 && std::fmod(r, 2.0) != 0.0) r -= 1.0;
+    return r;
+}
+
+Value floatUnaryExt(Opcode::Value op, Type::Value type, const Value& a) {
+    requireFloat(type, "this operation");
+    double x = a.asDouble();
+    double r = 0;
+    switch (op) {
+        case Opcode::Asinh: r = std::log(x + std::sqrt(x * x + 1.0)); break;
+        case Opcode::Acosh: r = std::log(x + std::sqrt(x * x - 1.0)); break;
+        case Opcode::Atanh: r = 0.5 * std::log((1.0 + x) / (1.0 - x)); break;
+        case Opcode::Exp10: r = std::pow(10.0, x); break;
+        case Opcode::Expm1: r = std::exp(x) - 1.0; break;
+        case Opcode::Log1p: r = std::log(1.0 + x); break;
+        case Opcode::Erf: r = std::erf(x); break;
+        case Opcode::Erfc: r = std::erfc(x); break;
+        case Opcode::Tgamma: r = std::tgamma(x); break;
+        case Opcode::Lgamma: r = std::lgamma(x); break;
+        case Opcode::Rint:
+        case Opcode::Nearbyint:
+        case Opcode::Roundeven: r = roundEven(x); break;
+        case Opcode::Logb: r = std::floor(std::log(std::fabs(x)) / std::log(2.0)); break;
+        case Opcode::Recip: r = 1.0 / x; break;
+        case Opcode::Rsqrt: r = 1.0 / std::sqrt(x); break;
+        case Opcode::Fract: r = x - std::floor(x); break;
+        case Opcode::Fsat: r = x < 0.0 ? 0.0 : (x > 1.0 ? 1.0 : x); break;
+        case Opcode::Degrees: r = x * (180.0 / kPi); break;
+        case Opcode::Radians: r = x * (kPi / 180.0); break;
+        case Opcode::Sinpi: r = std::sin(kPi * x); break;
+        case Opcode::Cospi: r = std::cos(kPi * x); break;
+        case Opcode::Tanpi: r = std::tan(kPi * x); break;
+        case Opcode::Frexp: {
+            int e = 0;
+            r = std::frexp(x, &e);
+            break;
+        }
+        case Opcode::Modf: {
+            double ip = 0;
+            r = std::modf(x, &ip);
+            break;
+        }
+        case Opcode::Modfi: {
+            double ip = 0;
+            std::modf(x, &ip);
+            r = ip;
+            break;
+        }
+        default: throw RuntimeError("not a unary float opcode");
+    }
+    return Value::fromDouble(type, r);
+}
+
+Value floatBinaryExt(Opcode::Value op, Type::Value type, const Value& a, const Value& b) {
+    requireFloat(type, "this operation");
+    double x = a.asDouble();
+    double y = b.asDouble();
+    double r = 0;
+    switch (op) {
+        case Opcode::Nextafter: r = std::nextafter(x, y); break;
+        case Opcode::Ldexp:
+        case Opcode::Scalbn: r = std::ldexp(x, static_cast<int>(b.asInt128())); break;
+        case Opcode::Fdim: r = (x > y) ? (x - y) : 0.0; break;
+        case Opcode::Fmax:
+            if (x != x) r = y;
+            else if (y != y) r = x;
+            else r = (x > y) ? x : y;
+            break;
+        case Opcode::Fmin:
+            if (x != x) r = y;
+            else if (y != y) r = x;
+            else r = (x < y) ? x : y;
+            break;
+        default: throw RuntimeError("not a binary float opcode");
+    }
+    return Value::fromDouble(type, r);
+}
+
+Value floatPredicate(Opcode::Value op, Type::Value type, const Value& a) {
+    requireFloat(type, "this operation");
+    double x = a.asDouble();
+    bool isNan = (x != x);
+    bool isInf = !isNan && (x > 1.7976931348623157e308 || x < -1.7976931348623157e308);
+    double ax = isNan ? 0.0 : (x < 0 ? -x : x);
+    bool isZero = !isNan && x == 0.0;
+    bool isSub = !isNan && !isInf && !isZero && ax < 2.2250738585072014e-308;
+    switch (op) {
+        case Opcode::Isnan: return makeBool(isNan);
+        case Opcode::Isinf: return makeBool(isInf);
+        case Opcode::Isfinite: return makeBool(!isNan && !isInf);
+        case Opcode::Isnormal: return makeBool(!isNan && !isInf && !isZero && !isSub);
+        case Opcode::Issubnormal: return makeBool(isSub);
+        case Opcode::Signbit: {
+            if (type == Type::F32) {
+                float f = static_cast<float>(x);
+                uint32_t bits;
+                std::memcpy(&bits, &f, 4);
+                return makeBool((bits >> 31) != 0);
+            }
+            uint64_t bits;
+            std::memcpy(&bits, &x, 8);
+            return makeBool((bits >> 63) != 0);
+        }
+        case Opcode::Fpclassify: {
+            int cls = 4;
+            if (isNan) cls = 0;
+            else if (isInf) cls = 1;
+            else if (isZero) cls = 2;
+            else if (isSub) cls = 3;
+            return Value::fromInt128(Type::I32, cls);
+        }
+        case Opcode::Ilogb: {
+            int e = 0;
+            std::frexp(x, &e);
+            return Value::fromInt128(Type::I32, e - 1);
+        }
+        case Opcode::Frexpe: {
+            int e = 0;
+            std::frexp(x, &e);
+            return Value::fromInt128(Type::I32, e);
+        }
+        default: throw RuntimeError("not a float predicate opcode");
+    }
+}
+
+bool compareResult(Opcode::Value op, int flag) {
+    switch (op) {
+        case Opcode::Cmpeq:
+        case Opcode::Seteq:
+        case Opcode::Breq: return flag == 0;
+        case Opcode::Cmpne:
+        case Opcode::Setne:
+        case Opcode::Brne: return flag != 0;
+        case Opcode::Cmplt:
+        case Opcode::Setlt:
+        case Opcode::Brlt:
+        case Opcode::Ucmplt:
+        case Opcode::Ubrlt: return flag < 0;
+        case Opcode::Cmpgt:
+        case Opcode::Setgt:
+        case Opcode::Brgt:
+        case Opcode::Ucmpgt:
+        case Opcode::Ubrgt: return flag > 0;
+        case Opcode::Cmple:
+        case Opcode::Setle:
+        case Opcode::Brle:
+        case Opcode::Ucmple:
+        case Opcode::Ubrle: return flag <= 0;
+        case Opcode::Cmpge:
+        case Opcode::Setge:
+        case Opcode::Brge:
+        case Opcode::Ucmpge:
+        case Opcode::Ubrge: return flag >= 0;
+        default: throw RuntimeError("not a comparison opcode");
+    }
+}
+
+int unsignedCompare(Type::Value type, const Value& a, const Value& b) {
+    UInt128 x = unsignedOf(a, type);
+    UInt128 y = unsignedOf(b, type);
+    return x < y ? -1 : (x > y ? 1 : 0);
+}
+
 Value convertOp(Opcode::Value op, Type::Value from, Type::Value to, const Value& a) {
     size_t fromBits = bitWidth(from);
     switch (op) {
@@ -732,6 +916,7 @@ public:
 
             for (size_t ii = 0; ii < block.instructions.size(); ++ii) {
                 const Instruction& instr = block.instructions[ii];
+                ++frame.pc;
                 switch (instr.opcode) {
                     case Opcode::OpcodeCount:
                         throw RuntimeError("invalid opcode in instruction stream");
@@ -832,9 +1017,12 @@ public:
                         break;
                     }
                     case Opcode::Ret: {
-                        return readOperand(frame, instr.operands[0], instr.type);
+                        Value rv = readOperand(frame, instr.operands[0], instr.type);
+                        freeAllocas(frame);
+                        return rv;
                     }
                     case Opcode::RetVoid: {
+                        freeAllocas(frame);
                         Value v;
                         v.type = Type::Void;
                         return v;
@@ -1184,6 +1372,416 @@ public:
                         frame.reg(instr.dest) = convertOp(instr.opcode, instr.type, instr.type2, a);
                         break;
                     }
+                    case Opcode::Asinh:
+                    case Opcode::Acosh:
+                    case Opcode::Atanh:
+                    case Opcode::Exp10:
+                    case Opcode::Expm1:
+                    case Opcode::Log1p:
+                    case Opcode::Erf:
+                    case Opcode::Erfc:
+                    case Opcode::Tgamma:
+                    case Opcode::Lgamma:
+                    case Opcode::Rint:
+                    case Opcode::Nearbyint:
+                    case Opcode::Roundeven:
+                    case Opcode::Logb:
+                    case Opcode::Recip:
+                    case Opcode::Rsqrt:
+                    case Opcode::Fract:
+                    case Opcode::Fsat:
+                    case Opcode::Degrees:
+                    case Opcode::Radians:
+                    case Opcode::Sinpi:
+                    case Opcode::Cospi:
+                    case Opcode::Tanpi:
+                    case Opcode::Frexp:
+                    case Opcode::Modf:
+                    case Opcode::Modfi: {
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        frame.reg(instr.dest) = floatUnaryExt(instr.opcode, instr.type, a);
+                        break;
+                    }
+                    case Opcode::Nextafter:
+                    case Opcode::Ldexp:
+                    case Opcode::Scalbn:
+                    case Opcode::Fdim:
+                    case Opcode::Fmax:
+                    case Opcode::Fmin: {
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        Value b = readOperand(frame, instr.operands[1],
+                                              (instr.opcode == Opcode::Ldexp || instr.opcode == Opcode::Scalbn)
+                                                  ? Type::I32
+                                                  : instr.type);
+                        frame.reg(instr.dest) = floatBinaryExt(instr.opcode, instr.type, a, b);
+                        break;
+                    }
+                    case Opcode::Isnan:
+                    case Opcode::Isinf:
+                    case Opcode::Isfinite:
+                    case Opcode::Isnormal:
+                    case Opcode::Issubnormal:
+                    case Opcode::Signbit:
+                    case Opcode::Fpclassify:
+                    case Opcode::Ilogb:
+                    case Opcode::Frexpe: {
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        frame.reg(instr.dest) = floatPredicate(instr.opcode, instr.type, a);
+                        break;
+                    }
+                    case Opcode::Lerp: {
+                        requireFloat(instr.type, "lerp");
+                        double a = readOperand(frame, instr.operands[0], instr.type).asDouble();
+                        double b = readOperand(frame, instr.operands[1], instr.type).asDouble();
+                        double t = readOperand(frame, instr.operands[2], instr.type).asDouble();
+                        frame.reg(instr.dest) = Value::fromDouble(instr.type, a + t * (b - a));
+                        break;
+                    }
+                    case Opcode::Fclamp: {
+                        requireFloat(instr.type, "fclamp");
+                        double x = readOperand(frame, instr.operands[0], instr.type).asDouble();
+                        double lo = readOperand(frame, instr.operands[1], instr.type).asDouble();
+                        double hi = readOperand(frame, instr.operands[2], instr.type).asDouble();
+                        frame.reg(instr.dest) = Value::fromDouble(instr.type, x < lo ? lo : (x > hi ? hi : x));
+                        break;
+                    }
+                    case Opcode::Nan: {
+                        requireFloat(instr.type, "nan");
+                        frame.reg(instr.dest) = Value::fromDouble(instr.type, std::sqrt(-1.0));
+                        break;
+                    }
+                    case Opcode::Inf: {
+                        requireFloat(instr.type, "inf");
+                        frame.reg(instr.dest) = Value::fromDouble(instr.type, 1.0 / 0.0);
+                        break;
+                    }
+                    case Opcode::Switch: {
+                        Value v = readOperand(frame, instr.operands[0], instr.type);
+                        Int128 idx = v.asInt128();
+                        size_t caseCount = instr.operands.size() >= 2 ? instr.operands.size() - 2 : 0;
+                        const Operand* target = &instr.operands[1];
+                        if (idx >= 0 && static_cast<size_t>(idx) < caseCount) {
+                            target = &instr.operands[2 + static_cast<size_t>(idx)];
+                        }
+                        blockIdx = resolveBlock(blockIndex, target->name, fn.name);
+                        jumped = true;
+                        break;
+                    }
+                    case Opcode::Select: {
+                        Value c = readOperand(frame, instr.operands[0], Type::I32);
+                        Value a = readOperand(frame, instr.operands[1], instr.type);
+                        Value b = readOperand(frame, instr.operands[2], instr.type);
+                        frame.reg(instr.dest) = (c.asInt128() != 0) ? a : b;
+                        break;
+                    }
+                    case Opcode::Seteq:
+                    case Opcode::Setne:
+                    case Opcode::Setlt:
+                    case Opcode::Setgt:
+                    case Opcode::Setle:
+                    case Opcode::Setge: {
+                        frame.reg(instr.dest) = makeBool(compareResult(instr.opcode, frame.cmpFlag));
+                        break;
+                    }
+                    case Opcode::Setc: {
+                        frame.reg(instr.dest) = makeBool(frame.carryFlag);
+                        break;
+                    }
+                    case Opcode::Setnc: {
+                        frame.reg(instr.dest) = makeBool(!frame.carryFlag);
+                        break;
+                    }
+                    case Opcode::Seteqz:
+                    case Opcode::Setnez: {
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        bool isZero = a.asInt128() == 0;
+                        frame.reg(instr.dest) = makeBool(instr.opcode == Opcode::Seteqz ? isZero : !isZero);
+                        break;
+                    }
+                    case Opcode::Cmpeq:
+                    case Opcode::Cmpne:
+                    case Opcode::Cmplt:
+                    case Opcode::Cmpgt:
+                    case Opcode::Cmple:
+                    case Opcode::Cmpge: {
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        Value b = readOperand(frame, instr.operands[1], instr.type);
+                        frame.reg(instr.dest) = makeBool(compareResult(instr.opcode, compare(instr.type, a, b)));
+                        break;
+                    }
+                    case Opcode::Ucmplt:
+                    case Opcode::Ucmpgt:
+                    case Opcode::Ucmple:
+                    case Opcode::Ucmpge: {
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        Value b = readOperand(frame, instr.operands[1], instr.type);
+                        frame.reg(instr.dest) = makeBool(compareResult(instr.opcode, unsignedCompare(instr.type, a, b)));
+                        break;
+                    }
+                    case Opcode::Cmpord:
+                    case Opcode::Cmpuno: {
+                        double x = readOperand(frame, instr.operands[0], instr.type).asDouble();
+                        double y = readOperand(frame, instr.operands[1], instr.type).asDouble();
+                        bool unordered = (x != x) || (y != y);
+                        frame.reg(instr.dest) = makeBool(instr.opcode == Opcode::Cmpuno ? unordered : !unordered);
+                        break;
+                    }
+                    case Opcode::Brz:
+                    case Opcode::Brnz: {
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        bool isZero = a.asInt128() == 0;
+                        if (instr.opcode == Opcode::Brz ? isZero : !isZero) {
+                            blockIdx = resolveBlock(blockIndex, instr.operands[1].name, fn.name);
+                            jumped = true;
+                        }
+                        break;
+                    }
+                    case Opcode::Breq:
+                    case Opcode::Brne:
+                    case Opcode::Brlt:
+                    case Opcode::Brgt:
+                    case Opcode::Brle:
+                    case Opcode::Brge: {
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        Value b = readOperand(frame, instr.operands[1], instr.type);
+                        if (compareResult(instr.opcode, compare(instr.type, a, b))) {
+                            blockIdx = resolveBlock(blockIndex, instr.operands[2].name, fn.name);
+                            jumped = true;
+                        }
+                        break;
+                    }
+                    case Opcode::Ubrlt:
+                    case Opcode::Ubrgt:
+                    case Opcode::Ubrle:
+                    case Opcode::Ubrge: {
+                        Value a = readOperand(frame, instr.operands[0], instr.type);
+                        Value b = readOperand(frame, instr.operands[1], instr.type);
+                        if (compareResult(instr.opcode, unsignedCompare(instr.type, a, b))) {
+                            blockIdx = resolveBlock(blockIndex, instr.operands[2].name, fn.name);
+                            jumped = true;
+                        }
+                        break;
+                    }
+                    case Opcode::Bcarry:
+                    case Opcode::Bncarry:
+                    case Opcode::Bovf:
+                    case Opcode::Bnovf: {
+                        bool take = false;
+                        if (instr.opcode == Opcode::Bcarry) take = frame.carryFlag;
+                        else if (instr.opcode == Opcode::Bncarry) take = !frame.carryFlag;
+                        else if (instr.opcode == Opcode::Bovf) take = frame.overflowFlag;
+                        else take = !frame.overflowFlag;
+                        if (take) {
+                            blockIdx = resolveBlock(blockIndex, instr.operands[0].name, fn.name);
+                            jumped = true;
+                        }
+                        break;
+                    }
+                    case Opcode::Tailcall: {
+                        NameIndexMap::const_iterator it = functionIndex_.find(instr.operands[0].name);
+                        if (it == functionIndex_.end()) {
+                            throw RuntimeError("tailcall to unknown function '" + instr.operands[0].name + "'");
+                        }
+                        std::vector<Value> callArgs;
+                        for (size_t i = 1; i < instr.operands.size(); ++i) {
+                            callArgs.push_back(readOperand(frame, instr.operands[i], Type::I64));
+                        }
+                        freeAllocas(frame);
+                        return call(it->second, callArgs);
+                    }
+                    case Opcode::Callindirect: {
+                        Value idx = readOperand(frame, instr.operands[0], Type::I64);
+                        Int128 fi = idx.asInt128();
+                        if (fi < 0 || static_cast<size_t>(fi) >= program_.functions.size()) {
+                            throw RuntimeError("callindirect to out-of-range function index " + toString(static_cast<int64_t>(fi)));
+                        }
+                        std::vector<Value> callArgs;
+                        for (size_t i = 1; i < instr.operands.size(); ++i) {
+                            callArgs.push_back(readOperand(frame, instr.operands[i], Type::I64));
+                        }
+                        Value result = call(static_cast<size_t>(fi), callArgs);
+                        if (instr.hasDest) frame.reg(instr.dest) = result;
+                        break;
+                    }
+                    case Opcode::Trap:
+                        throw RuntimeError("trap");
+                    case Opcode::Unreachable:
+                        throw RuntimeError("reached an unreachable instruction");
+                    case Opcode::Abort:
+                        throw RuntimeError("abort");
+                    case Opcode::Nop:
+                        break;
+                    case Opcode::Enter: {
+                        Value n = readOperand(frame, instr.operands[0], instr.type);
+                        frame.enterSize = static_cast<uint64_t>(n.asInt128());
+                        break;
+                    }
+                    case Opcode::Leave: {
+                        frame.enterSize = 0;
+                        break;
+                    }
+                    case Opcode::Alloca: {
+                        Value n = readOperand(frame, instr.operands[0], instr.type);
+                        uint64_t off = heapAlloc(static_cast<uint64_t>(n.asInt128()));
+                        frame.allocas.push_back(off);
+                        frame.reg(instr.dest) = makePtr(off);
+                        break;
+                    }
+                    case Opcode::Getsp:
+                    case Opcode::Stacksave: {
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, static_cast<Int128>(stackPointer_));
+                        break;
+                    }
+                    case Opcode::Setsp:
+                    case Opcode::Stackrestore: {
+                        Value v = readOperand(frame, instr.operands[0], instr.type);
+                        Int128 sp = v.asInt128();
+                        if (sp < 0 || static_cast<size_t>(sp) > stack_.size()) throw RuntimeError("stack pointer out of range");
+                        stackPointer_ = static_cast<size_t>(sp);
+                        break;
+                    }
+                    case Opcode::Getfp: {
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, static_cast<Int128>(frame.framePointer));
+                        break;
+                    }
+                    case Opcode::Setfp: {
+                        Value v = readOperand(frame, instr.operands[0], instr.type);
+                        frame.framePointer = static_cast<uint64_t>(v.asInt128());
+                        break;
+                    }
+                    case Opcode::Getpc: {
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, static_cast<Int128>(frame.pc));
+                        break;
+                    }
+                    case Opcode::Framesize: {
+                        frame.reg(instr.dest) =
+                            Value::fromInt128(instr.type, static_cast<Int128>(frame.regs.size() * 8 + frame.enterSize));
+                        break;
+                    }
+                    case Opcode::Stackdepth: {
+                        frame.reg(instr.dest) =
+                            Value::fromInt128(instr.type, static_cast<Int128>(stack_.size() - stackPointer_));
+                        break;
+                    }
+                    case Opcode::Stackfree: {
+                        freeAllocas(frame);
+                        break;
+                    }
+                    case Opcode::Pushf: {
+                        int32_t packed = frame.cmpFlag & 0xFF;
+                        if (frame.carryFlag) packed |= 0x100;
+                        if (frame.overflowFlag) packed |= 0x200;
+                        pushValue(Value::fromInt128(Type::I32, packed));
+                        break;
+                    }
+                    case Opcode::Popf: {
+                        Value v = popValue(Type::I32);
+                        int32_t packed = static_cast<int32_t>(v.asInt128());
+                        frame.cmpFlag = static_cast<signed char>(packed & 0xFF);
+                        frame.carryFlag = (packed & 0x100) != 0;
+                        frame.overflowFlag = (packed & 0x200) != 0;
+                        break;
+                    }
+                    case Opcode::Getelementptr: {
+                        uint64_t base = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        Int128 index = readOperand(frame, instr.operands[1], Type::I64).asInt128();
+                        Int128 scale = readOperand(frame, instr.operands[2], Type::I64).asInt128();
+                        Int128 offset = instr.operands.size() > 3
+                                            ? readOperand(frame, instr.operands[3], Type::I64).asInt128()
+                                            : 0;
+                        frame.reg(instr.dest) =
+                            makePtr(static_cast<uint64_t>(static_cast<Int128>(base) + index * scale + offset));
+                        break;
+                    }
+                    case Opcode::Ptradd:
+                    case Opcode::Ptrsub: {
+                        uint64_t base = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        Int128 off = readOperand(frame, instr.operands[1], Type::I64).asInt128();
+                        Int128 r = (instr.opcode == Opcode::Ptradd) ? (static_cast<Int128>(base) + off)
+                                                                     : (static_cast<Int128>(base) - off);
+                        frame.reg(instr.dest) = makePtr(static_cast<uint64_t>(r));
+                        break;
+                    }
+                    case Opcode::Ptrdiff: {
+                        uint64_t a = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint64_t b = readOperand(frame, instr.operands[1], Type::Ptr).bits.ptr;
+                        frame.reg(instr.dest) =
+                            Value::fromInt128(instr.type, static_cast<Int128>(a) - static_cast<Int128>(b));
+                        break;
+                    }
+                    case Opcode::Fieldload:
+                    case Opcode::Loadv:
+                    case Opcode::Loadu: {
+                        uint64_t base = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        Int128 off = instr.operands.size() > 1
+                                         ? readOperand(frame, instr.operands[1], Type::I64).asInt128()
+                                         : 0;
+                        frame.reg(instr.dest) = loadValue(static_cast<uint64_t>(static_cast<Int128>(base) + off), instr.type);
+                        break;
+                    }
+                    case Opcode::Fieldstore:
+                    case Opcode::Storev:
+                    case Opcode::Storeu: {
+                        uint64_t base = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        bool hasOffset = instr.operands.size() > 2;
+                        Int128 off = hasOffset ? readOperand(frame, instr.operands[1], Type::I64).asInt128() : 0;
+                        const Operand& valueOp = hasOffset ? instr.operands[2] : instr.operands[1];
+                        Value value = readOperand(frame, valueOp, instr.type);
+                        storeValue(static_cast<uint64_t>(static_cast<Int128>(base) + off), value);
+                        break;
+                    }
+                    case Opcode::Arrayload: {
+                        uint64_t base = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        Int128 index = readOperand(frame, instr.operands[1], Type::I64).asInt128();
+                        Int128 addr = static_cast<Int128>(base) + index * static_cast<Int128>(sizeOfType(instr.type));
+                        frame.reg(instr.dest) = loadValue(static_cast<uint64_t>(addr), instr.type);
+                        break;
+                    }
+                    case Opcode::Arraystore: {
+                        uint64_t base = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        Int128 index = readOperand(frame, instr.operands[1], Type::I64).asInt128();
+                        Value value = readOperand(frame, instr.operands[2], instr.type);
+                        Int128 addr = static_cast<Int128>(base) + index * static_cast<Int128>(sizeOfType(instr.type));
+                        storeValue(static_cast<uint64_t>(addr), value);
+                        break;
+                    }
+                    case Opcode::Ptrtoint: {
+                        uint64_t p = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        frame.reg(instr.dest) = Value::fromInt128(instr.type, static_cast<Int128>(p));
+                        break;
+                    }
+                    case Opcode::Inttoptr: {
+                        Value v = readOperand(frame, instr.operands[0], instr.type);
+                        frame.reg(instr.dest) = makePtr(static_cast<uint64_t>(v.asInt128()));
+                        break;
+                    }
+                    case Opcode::Ptreq:
+                    case Opcode::Ptrne:
+                    case Opcode::Ptrlt:
+                    case Opcode::Ptrgt: {
+                        uint64_t a = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        uint64_t b = readOperand(frame, instr.operands[1], Type::Ptr).bits.ptr;
+                        bool r = false;
+                        if (instr.opcode == Opcode::Ptreq) r = a == b;
+                        else if (instr.opcode == Opcode::Ptrne) r = a != b;
+                        else if (instr.opcode == Opcode::Ptrlt) r = a < b;
+                        else r = a > b;
+                        frame.reg(instr.dest) = makeBool(r);
+                        break;
+                    }
+                    case Opcode::Ptrisnull: {
+                        uint64_t a = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        frame.reg(instr.dest) = makeBool(a == 0);
+                        break;
+                    }
+                    case Opcode::Ptralign: {
+                        uint64_t a = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        Int128 n = readOperand(frame, instr.operands[1], Type::I64).asInt128();
+                        if (n <= 0) throw RuntimeError("ptralign to a non-positive alignment");
+                        uint64_t align = static_cast<uint64_t>(n);
+                        frame.reg(instr.dest) = makePtr(((a + align - 1) / align) * align);
+                        break;
+                    }
                     case Opcode::Syscall: {
                         int64_t sid = static_cast<int64_t>(readOperand(frame, instr.operands[0], Type::I64).asInt128());
                         int64_t a0 = instr.operands.size() > 1
@@ -1241,6 +1839,11 @@ private:
         std::memcpy(&v.bits, &stack_[0] + stackPointer_, sz);
         stackPointer_ += sz;
         return v;
+    }
+
+    void freeAllocas(Frame& frame) {
+        for (size_t i = frame.allocas.size(); i-- > 0;) heapFree(frame.allocas[i]);
+        frame.allocas.clear();
     }
 
     void checkRange(uint64_t addr, uint64_t len) const {

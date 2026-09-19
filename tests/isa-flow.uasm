@@ -1,0 +1,905 @@
+module isa_part2
+
+export func zerofn() -> i32 {
+entry:
+    mov.i32 r0, 77
+    ret.i32 r0
+}
+
+func retseven() -> i32 {
+entry:
+    mov.i32 r0, 7
+    ret.i32 r0
+}
+
+func viatail() -> i32 {
+entry:
+    tailcall retseven
+}
+
+export func main() -> i32 {
+chk1:
+    mov.f64 r0, 1.0
+    asinh.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 881
+    cmp.i32 r22, r30
+    bne bad1
+    jmp chk2
+bad1:
+    mov.i32 r31, 1
+    ret.i32 r31
+chk2:
+    mov.f64 r0, 2.0
+    acosh.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 1317
+    cmp.i32 r22, r30
+    bne bad2
+    jmp chk3
+bad2:
+    mov.i32 r31, 2
+    ret.i32 r31
+chk3:
+    mov.f64 r0, 0.5
+    atanh.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 549
+    cmp.i32 r22, r30
+    bne bad3
+    jmp chk4
+bad3:
+    mov.i32 r31, 3
+    ret.i32 r31
+chk4:
+    mov.f64 r0, 2.0
+    exp10.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 100000
+    cmp.i32 r22, r30
+    bne bad4
+    jmp chk5
+bad4:
+    mov.i32 r31, 4
+    ret.i32 r31
+chk5:
+    mov.f64 r0, 1.0
+    expm1.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 1718
+    cmp.i32 r22, r30
+    bne bad5
+    jmp chk6
+bad5:
+    mov.i32 r31, 5
+    ret.i32 r31
+chk6:
+    mov.f64 r0, 1.0
+    log1p.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 693
+    cmp.i32 r22, r30
+    bne bad6
+    jmp chk7
+bad6:
+    mov.i32 r31, 6
+    ret.i32 r31
+chk7:
+    mov.f64 r0, 1.0
+    erf.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 843
+    cmp.i32 r22, r30
+    bne bad7
+    jmp chk8
+bad7:
+    mov.i32 r31, 7
+    ret.i32 r31
+chk8:
+    mov.f64 r0, 1.0
+    erfc.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 157
+    cmp.i32 r22, r30
+    bne bad8
+    jmp chk9
+bad8:
+    mov.i32 r31, 8
+    ret.i32 r31
+chk9:
+    mov.f64 r0, 5.0
+    tgamma.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 24000
+    cmp.i32 r22, r30
+    bne bad9
+    jmp chk10
+bad9:
+    mov.i32 r31, 9
+    ret.i32 r31
+chk10:
+    mov.f64 r0, 5.0
+    lgamma.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 3178
+    cmp.i32 r22, r30
+    bne bad10
+    jmp chk11
+bad10:
+    mov.i32 r31, 10
+    ret.i32 r31
+chk11:
+    mov.f64 r0, 2.5
+    rint.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 2000
+    cmp.i32 r22, r30
+    bne bad11
+    jmp chk12
+bad11:
+    mov.i32 r31, 11
+    ret.i32 r31
+chk12:
+    mov.f64 r0, 3.5
+    rint.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 4000
+    cmp.i32 r22, r30
+    bne bad12
+    jmp chk13
+bad12:
+    mov.i32 r31, 12
+    ret.i32 r31
+chk13:
+    mov.f64 r0, -2.5
+    roundeven.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, -2000
+    cmp.i32 r22, r30
+    bne bad13
+    jmp chk14
+bad13:
+    mov.i32 r31, 13
+    ret.i32 r31
+chk14:
+    mov.f64 r0, 4.0
+    recip.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 250
+    cmp.i32 r22, r30
+    bne bad14
+    jmp chk15
+bad14:
+    mov.i32 r31, 14
+    ret.i32 r31
+chk15:
+    mov.f64 r0, 16.0
+    rsqrt.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 250
+    cmp.i32 r22, r30
+    bne bad15
+    jmp chk16
+bad15:
+    mov.i32 r31, 15
+    ret.i32 r31
+chk16:
+    mov.f64 r0, 3.75
+    fract.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 750
+    cmp.i32 r22, r30
+    bne bad16
+    jmp chk17
+bad16:
+    mov.i32 r31, 16
+    ret.i32 r31
+chk17:
+    mov.f64 r0, 2.0
+    fsat.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 1000
+    cmp.i32 r22, r30
+    bne bad17
+    jmp chk18
+bad17:
+    mov.i32 r31, 17
+    ret.i32 r31
+chk18:
+    mov.f64 r0, -1.0
+    fsat.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 0
+    cmp.i32 r22, r30
+    bne bad18
+    jmp chk19
+bad18:
+    mov.i32 r31, 18
+    ret.i32 r31
+chk19:
+    mov.f64 r0, 180.0
+    radians.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 3142
+    cmp.i32 r22, r30
+    bne bad19
+    jmp chk20
+bad19:
+    mov.i32 r31, 19
+    ret.i32 r31
+chk20:
+    mov.f64 r0, 3.14159265358979
+    degrees.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 180000
+    cmp.i32 r22, r30
+    bne bad20
+    jmp chk21
+bad20:
+    mov.i32 r31, 20
+    ret.i32 r31
+chk21:
+    mov.f64 r0, 0.5
+    sinpi.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 1000
+    cmp.i32 r22, r30
+    bne bad21
+    jmp chk22
+bad21:
+    mov.i32 r31, 21
+    ret.i32 r31
+chk22:
+    mov.f64 r0, 1.0
+    cospi.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, -1000
+    cmp.i32 r22, r30
+    bne bad22
+    jmp chk23
+bad22:
+    mov.i32 r31, 22
+    ret.i32 r31
+chk23:
+    mov.f64 r0, 8.0
+    frexp.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 500
+    cmp.i32 r22, r30
+    bne bad23
+    jmp chk24
+bad23:
+    mov.i32 r31, 23
+    ret.i32 r31
+chk24:
+    mov.f64 r0, 3.75
+    modf.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 750
+    cmp.i32 r22, r30
+    bne bad24
+    jmp chk25
+bad24:
+    mov.i32 r31, 24
+    ret.i32 r31
+chk25:
+    mov.f64 r0, 3.75
+    modfi.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 3000
+    cmp.i32 r22, r30
+    bne bad25
+    jmp chk26
+bad25:
+    mov.i32 r31, 25
+    ret.i32 r31
+chk26:
+    mov.f64 r0, 1.5
+    mov.i32 r1, 3
+    ldexp.f64 r19, r0, r1
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 12000
+    cmp.i32 r22, r30
+    bne bad26
+    jmp chk27
+bad26:
+    mov.i32 r31, 26
+    ret.i32 r31
+chk27:
+    mov.f64 r0, 5.0
+    mov.f64 r1, 3.0
+    fdim.f64 r19, r0, r1
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 2000
+    cmp.i32 r22, r30
+    bne bad27
+    jmp chk28
+bad27:
+    mov.i32 r31, 27
+    ret.i32 r31
+chk28:
+    mov.f64 r0, 2.0
+    mov.f64 r1, 7.0
+    fmax.f64 r19, r0, r1
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 7000
+    cmp.i32 r22, r30
+    bne bad28
+    jmp chk29
+bad28:
+    mov.i32 r31, 28
+    ret.i32 r31
+chk29:
+    mov.f64 r0, 2.0
+    mov.f64 r1, 7.0
+    fmin.f64 r19, r0, r1
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 2000
+    cmp.i32 r22, r30
+    bne bad29
+    jmp chk30
+bad29:
+    mov.i32 r31, 29
+    ret.i32 r31
+chk30:
+    mov.f64 r0, 8.0
+    logb.f64 r19, r0
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 3000
+    cmp.i32 r22, r30
+    bne bad30
+    jmp chk31
+bad30:
+    mov.i32 r31, 30
+    ret.i32 r31
+chk31:
+    mov.f64 r0, 0.0
+    mov.f64 r1, 10.0
+    mov.f64 r2, 0.25
+    lerp.f64 r19, r0, r1, r2
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 2500
+    cmp.i32 r22, r30
+    bne bad31
+    jmp chk32
+bad31:
+    mov.i32 r31, 31
+    ret.i32 r31
+chk32:
+    mov.f64 r0, 5.0
+    mov.f64 r1, 0.0
+    mov.f64 r2, 1.0
+    fclamp.f64 r19, r0, r1, r2
+    mov.f64 r20, 1000.0
+    mul.f64 r21, r19, r20
+    round.f64 r21, r21
+    fptosi.f64.i32 r22, r21
+    mov.i32 r30, 1000
+    cmp.i32 r22, r30
+    bne bad32
+    jmp chk33
+bad32:
+    mov.i32 r31, 32
+    ret.i32 r31
+chk33:
+    mov.f64 r0, 8.0
+    frexpe.f64 r2, r0
+    mov.i32 r30, 4
+    cmp.i32 r2, r30
+    bne bad33
+    jmp chk34
+bad33:
+    mov.i32 r31, 33
+    ret.i32 r31
+chk34:
+    mov.f64 r0, 8.0
+    ilogb.f64 r2, r0
+    mov.i32 r30, 3
+    cmp.i32 r2, r30
+    bne bad34
+    jmp chk35
+bad34:
+    mov.i32 r31, 34
+    ret.i32 r31
+chk35:
+    nan.f64 r0
+    isnan.f64 r2, r0
+    mov.i32 r30, 1
+    cmp.i32 r2, r30
+    bne bad35
+    jmp chk36
+bad35:
+    mov.i32 r31, 35
+    ret.i32 r31
+chk36:
+    inf.f64 r0
+    isinf.f64 r2, r0
+    mov.i32 r30, 1
+    cmp.i32 r2, r30
+    bne bad36
+    jmp chk37
+bad36:
+    mov.i32 r31, 36
+    ret.i32 r31
+chk37:
+    mov.f64 r0, 1.0
+    isfinite.f64 r2, r0
+    mov.i32 r30, 1
+    cmp.i32 r2, r30
+    bne bad37
+    jmp chk38
+bad37:
+    mov.i32 r31, 37
+    ret.i32 r31
+chk38:
+    mov.f64 r0, 1.0
+    isnormal.f64 r2, r0
+    mov.i32 r30, 1
+    cmp.i32 r2, r30
+    bne bad38
+    jmp chk39
+bad38:
+    mov.i32 r31, 38
+    ret.i32 r31
+chk39:
+    mov.f64 r0, -1.0
+    signbit.f64 r2, r0
+    mov.i32 r30, 1
+    cmp.i32 r2, r30
+    bne bad39
+    jmp chk40
+bad39:
+    mov.i32 r31, 39
+    ret.i32 r31
+chk40:
+    nan.f64 r0
+    fpclassify.f64 r2, r0
+    mov.i32 r30, 0
+    cmp.i32 r2, r30
+    bne bad40
+    jmp chk41
+bad40:
+    mov.i32 r31, 40
+    ret.i32 r31
+chk41:
+    inf.f64 r0
+    fpclassify.f64 r2, r0
+    mov.i32 r30, 1
+    cmp.i32 r2, r30
+    bne bad41
+    jmp chk42
+bad41:
+    mov.i32 r31, 41
+    ret.i32 r31
+chk42:
+    mov.f64 r0, 0.0
+    fpclassify.f64 r2, r0
+    mov.i32 r30, 2
+    cmp.i32 r2, r30
+    bne bad42
+    jmp chk43
+bad42:
+    mov.i32 r31, 42
+    ret.i32 r31
+chk43:
+    mov.f64 r0, 1.0
+    mov.f64 r1, 2.0
+    cmpord.f64 r2, r0, r1
+    mov.i32 r30, 1
+    cmp.i32 r2, r30
+    bne bad43
+    jmp chk44
+bad43:
+    mov.i32 r31, 43
+    ret.i32 r31
+chk44:
+    nan.f64 r0
+    mov.f64 r1, 2.0
+    cmpuno.f64 r2, r0, r1
+    mov.i32 r30, 1
+    cmp.i32 r2, r30
+    bne bad44
+    jmp chk45
+bad44:
+    mov.i32 r31, 44
+    ret.i32 r31
+chk45:
+    mov.i32 r0, 1
+    mov.i32 r1, 7
+    mov.i32 r3, 9
+    select.i32 r2, r0, r1, r3
+    mov.i32 r30, 7
+    cmp.i32 r2, r30
+    bne bad45
+    jmp chk46
+bad45:
+    mov.i32 r31, 45
+    ret.i32 r31
+chk46:
+    mov.i32 r0, 0
+    mov.i32 r1, 7
+    mov.i32 r3, 9
+    select.i32 r2, r0, r1, r3
+    mov.i32 r30, 9
+    cmp.i32 r2, r30
+    bne bad46
+    jmp chk47
+bad46:
+    mov.i32 r31, 46
+    ret.i32 r31
+chk47:
+    mov.i32 r0, 5
+    mov.i32 r1, 5
+    cmpeq.i32 r2, r0, r1
+    mov.i32 r30, 1
+    cmp.i32 r2, r30
+    bne bad47
+    jmp chk48
+bad47:
+    mov.i32 r31, 47
+    ret.i32 r31
+chk48:
+    mov.i32 r0, 5
+    mov.i32 r1, 6
+    cmplt.i32 r2, r0, r1
+    mov.i32 r30, 1
+    cmp.i32 r2, r30
+    bne bad48
+    jmp chk49
+bad48:
+    mov.i32 r31, 48
+    ret.i32 r31
+chk49:
+    mov.i32 r0, -1
+    mov.i32 r1, 5
+    ucmplt.i32 r2, r0, r1
+    mov.i32 r30, 0
+    cmp.i32 r2, r30
+    bne bad49
+    jmp chk50
+bad49:
+    mov.i32 r31, 49
+    ret.i32 r31
+chk50:
+    mov.i32 r0, -1
+    mov.i32 r1, 5
+    ucmpgt.i32 r2, r0, r1
+    mov.i32 r30, 1
+    cmp.i32 r2, r30
+    bne bad50
+    jmp chk51
+bad50:
+    mov.i32 r31, 50
+    ret.i32 r31
+chk51:
+    mov.i32 r0, 3
+    mov.i32 r1, 3
+    cmp.i32 r0, r1
+    seteq.i32 r2
+    mov.i32 r30, 1
+    cmp.i32 r2, r30
+    bne bad51
+    jmp chk52
+bad51:
+    mov.i32 r31, 51
+    ret.i32 r31
+chk52:
+    mov.i32 r0, 3
+    mov.i32 r1, 4
+    cmp.i32 r0, r1
+    setlt.i32 r2
+    mov.i32 r30, 1
+    cmp.i32 r2, r30
+    bne bad52
+    jmp chk53
+bad52:
+    mov.i32 r31, 52
+    ret.i32 r31
+chk53:
+    mov.i32 r0, 0
+    seteqz.i32 r2, r0
+    mov.i32 r30, 1
+    cmp.i32 r2, r30
+    bne bad53
+    jmp chk54
+bad53:
+    mov.i32 r31, 53
+    ret.i32 r31
+chk54:
+    mov.i32 r0, 9
+    setnez.i32 r2, r0
+    mov.i32 r30, 1
+    cmp.i32 r2, r30
+    bne bad54
+    jmp chk55
+bad54:
+    mov.i32 r31, 54
+    ret.i32 r31
+chk55:
+    mov.i32 r0, 2147483647
+    mov.i32 r1, 1
+    addo.i32 r3, r0, r1
+    setc.i32 r2
+    seto.i32 r2
+    mov.i32 r30, 1
+    cmp.i32 r2, r30
+    bne bad55
+    jmp flow1
+bad55:
+    mov.i32 r31, 55
+    ret.i32 r31
+flow1:
+    mov.i32 r0, 1
+    switch.i32 r0, sw_def, sw_c0, sw_c1
+sw_c0:
+    mov.i32 r31, 56
+    ret.i32 r31
+sw_def:
+    mov.i32 r31, 57
+    ret.i32 r31
+sw_c1:
+    mov.i32 r0, 9
+    switch.i32 r0, sw_ok, sw_c0, sw_c0
+sw_ok:
+    mov.i32 r0, 0
+    brz.i32 r0, brz_ok
+    jmp bad_brz
+bad_brz:
+    mov.i32 r31, 58
+    ret.i32 r31
+brz_ok:
+    mov.i32 r0, 5
+    brnz.i32 r0, brnz_ok
+    jmp bad_brz
+brnz_ok:
+    mov.i32 r0, 3
+    mov.i32 r1, 3
+    breq.i32 r0, r1, breq_ok
+    jmp bad_brz
+breq_ok:
+    mov.i32 r0, -1
+    mov.i32 r1, 5
+    ubrgt.i32 r0, r1, ubr_ok
+    jmp bad_brz
+ubr_ok:
+    mov.i32 r0, 2147483647
+    mov.i32 r1, 1
+    addo.i32 r2, r0, r1
+    bovf ovf_ok
+    jmp bad_brz
+ovf_ok:
+    call viatail, r0
+    mov.i32 r1, 7
+    cmp.i32 r0, r1
+    bne bad_brz
+    jmp ind1
+ind1:
+    mov.i32 r0, 0
+    callindirect.i32 r1, r0
+    mov.i32 r2, 77
+    cmp.i32 r1, r2
+    bne bad_ind
+    jmp stk1
+bad_ind:
+    mov.i32 r31, 59
+    ret.i32 r31
+stk1:
+    nop
+    alloca.ptr r0, 64
+    mov.i32 r1, 12345
+    store.i32 r0, r1
+    load.i32 r2, r0
+    cmp.i32 r2, r1
+    bne bad_stk
+    jmp stk2
+bad_stk:
+    mov.i32 r31, 60
+    ret.i32 r31
+stk2:
+    getsp.i64 r0
+    push.i32 r1
+    stackdepth.i64 r3
+    pop.i32 r4
+    getsp.i64 r5
+    cmp.i64 r0, r5
+    bne bad_stk
+    jmp stk3
+stk3:
+    mov.i64 r0, 4242
+    setfp.i64 r0
+    getfp.i64 r1
+    cmp.i64 r0, r1
+    bne bad_stk
+    jmp stk4
+stk4:
+    mov.i32 r0, 1
+    mov.i32 r1, 1
+    cmp.i32 r0, r1
+    pushf
+    mov.i32 r2, 5
+    mov.i32 r3, 9
+    cmp.i32 r2, r3
+    popf
+    seteq.i32 r4
+    mov.i32 r5, 1
+    cmp.i32 r4, r5
+    bne bad_stk
+    jmp agg1
+agg1:
+    mov.ptr r0, 5000
+    mov.i64 r1, 4
+    mov.i64 r2, 8
+    mov.i64 r3, 16
+    getelementptr.ptr r4, r0, r1, r2, r3
+    ptrtoint.i64 r5, r4
+    mov.i64 r6, 5048
+    cmp.i64 r5, r6
+    bne bad_agg
+    jmp agg2
+bad_agg:
+    mov.i32 r31, 61
+    ret.i32 r31
+agg2:
+    mov.ptr r0, 5000
+    mov.i64 r1, 24
+    ptradd.ptr r2, r0, r1
+    ptrdiff.i64 r3, r2, r0
+    mov.i64 r4, 24
+    cmp.i64 r3, r4
+    bne bad_agg
+    jmp agg3
+agg3:
+    mov.ptr r0, 5100
+    mov.i64 r1, 8
+    mov.i32 r2, 999
+    fieldstore.i32 r0, r1, r2
+    fieldload.i32 r3, r0, r1
+    cmp.i32 r3, r2
+    bne bad_agg
+    jmp agg4
+agg4:
+    mov.ptr r0, 5200
+    mov.i64 r1, 3
+    mov.i32 r2, 4321
+    arraystore.i32 r0, r1, r2
+    arrayload.i32 r3, r0, r1
+    cmp.i32 r3, r2
+    bne bad_agg
+    jmp agg5
+agg5:
+    mov.ptr r0, 5300
+    mov.i32 r1, 55
+    storev.i32 r0, r1
+    loadv.i32 r2, r0
+    cmp.i32 r2, r1
+    bne bad_agg
+    jmp agg6
+agg6:
+    mov.ptr r0, 5301
+    mov.i32 r1, 66
+    storeu.i32 r0, r1
+    loadu.i32 r2, r0
+    cmp.i32 r2, r1
+    bne bad_agg
+    jmp agg7
+agg7:
+    mov.ptr r0, 5000
+    mov.ptr r1, 5000
+    ptreq.i32 r2, r0, r1
+    mov.i32 r3, 1
+    cmp.i32 r2, r3
+    bne bad_agg
+    jmp agg8
+agg8:
+    mov.ptr r0, 0
+    ptrisnull.i32 r2, r0
+    mov.i32 r3, 1
+    cmp.i32 r2, r3
+    bne bad_agg
+    jmp agg9
+agg9:
+    mov.ptr r0, 5003
+    mov.i64 r1, 8
+    ptralign.ptr r2, r0, r1
+    ptrtoint.i64 r3, r2
+    mov.i64 r4, 5008
+    cmp.i64 r3, r4
+    bne bad_agg
+    jmp done
+done:
+    mov.i32 r31, 0
+    ret.i32 r31
+}
