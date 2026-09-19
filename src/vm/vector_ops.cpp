@@ -291,6 +291,42 @@ void vectorSetLane(Value& v, Type::Value lane, std::size_t index, const Value& l
     std::memcpy(&v.bits.vec[index * sizeOfType(lane)], &laneValue.bits, sizeOfType(lane));
 }
 
+bool vectorOpIsWide(Opcode::Value op) {
+    Extension::Value e = opcodeExtension(op);
+    return e == Extension::Simd256 || e == Extension::Simd512;
+}
+
+int vectorMaskedBase(Opcode::Value op, Opcode::Value& baseOp) {
+    switch (op) {
+        case Opcode::VAddz: baseOp = Opcode::VAdd; return 1;
+        case Opcode::VAddk: baseOp = Opcode::VAdd; return 0;
+        case Opcode::VSubz: baseOp = Opcode::VSub; return 1;
+        case Opcode::VSubk: baseOp = Opcode::VSub; return 0;
+        case Opcode::VMulz: baseOp = Opcode::VMul; return 1;
+        case Opcode::VMulk: baseOp = Opcode::VMul; return 0;
+        case Opcode::VDivz: baseOp = Opcode::VDiv; return 1;
+        case Opcode::VDivk: baseOp = Opcode::VDiv; return 0;
+        case Opcode::VMinz: baseOp = Opcode::VMin; return 1;
+        case Opcode::VMink: baseOp = Opcode::VMin; return 0;
+        case Opcode::VMaxz: baseOp = Opcode::VMax; return 1;
+        case Opcode::VMaxk: baseOp = Opcode::VMax; return 0;
+        case Opcode::VSqrtz: baseOp = Opcode::VSqrt; return 1;
+        case Opcode::VSqrtk: baseOp = Opcode::VSqrt; return 0;
+        case Opcode::VAbsz: baseOp = Opcode::VAbs; return 1;
+        case Opcode::VAbsk: baseOp = Opcode::VAbs; return 0;
+        case Opcode::VNegz: baseOp = Opcode::VNeg; return 1;
+        case Opcode::VNegk: baseOp = Opcode::VNeg; return 0;
+        case Opcode::VFmaz: baseOp = Opcode::VMla; return 1;
+        case Opcode::VFmak: baseOp = Opcode::VMla; return 0;
+        case Opcode::VAddb: baseOp = Opcode::VAdd; return 2;
+        case Opcode::VSubb: baseOp = Opcode::VSub; return 2;
+        case Opcode::VMulb: baseOp = Opcode::VMul; return 2;
+        case Opcode::VDivb: baseOp = Opcode::VDiv; return 2;
+        case Opcode::VFmab: baseOp = Opcode::VMla; return 2;
+        default: return -1;
+    }
+}
+
 bool vectorOpIsMemory(Opcode::Value op) {
     switch (op) {
         case Opcode::VLoad:
@@ -302,10 +338,488 @@ bool vectorOpIsMemory(Opcode::Value op) {
         case Opcode::VLoadsplat:
         case Opcode::VMaskload:
         case Opcode::VMaskstore:
+        case Opcode::VLoadk:
+        case Opcode::VLoadz:
+        case Opcode::VStorek:
+        case Opcode::VGatherk:
+        case Opcode::VScatterk:
+        case Opcode::VExpandload:
+        case Opcode::VCompressstore:
             return true;
         default:
             return false;
     }
+}
+
+namespace {
+
+UInt128 maskBitsOf(const Value& v) { return static_cast<UInt128>(v.asInt128()); }
+
+bool maskBit(const Value& m, size_t i) { return ((maskBitsOf(m) >> i) & 1) != 0; }
+
+Value maskValue(UInt128 bits) { return Value::fromInt128(Type::I64, static_cast<Int128>(bits)); }
+
+Value halfVector(const Value& src, Type::Value lane, size_t laneCount, size_t half) {
+    Value out;
+    out.type = Type::V128;
+    size_t perHalf = laneCount / 2;
+    for (size_t i = 0; i < perHalf; ++i) {
+        vectorSetLane(out, lane, i, vectorGetLane(src, lane, half * perHalf + i));
+    }
+    return out;
+}
+
+}
+
+Value vectorComputeWide(Opcode::Value op, Type::Value width, Type::Value lane, const Value* args,
+                        std::size_t argCount) {
+    size_t n = vectorLaneCount(width, lane);
+    size_t bits = laneBits(lane);
+    Value out;
+    out.type = width;
+
+    switch (op) {
+        case Opcode::Kset: return maskValue(laneMask(n));
+        case Opcode::Kclr: return maskValue(0);
+        default: break;
+    }
+
+    if (argCount == 0) throw RuntimeError(std::string(opcodeName(op)) + " requires at least one operand");
+
+    switch (op) {
+        case Opcode::Kmov: return maskValue(maskBitsOf(args[0]) & laneMask(n));
+        case Opcode::Knot: return maskValue(~maskBitsOf(args[0]) & laneMask(n));
+        case Opcode::Kand: return maskValue((maskBitsOf(args[0]) & maskBitsOf(args[1])) & laneMask(n));
+        case Opcode::Kor: return maskValue((maskBitsOf(args[0]) | maskBitsOf(args[1])) & laneMask(n));
+        case Opcode::Kxor: return maskValue((maskBitsOf(args[0]) ^ maskBitsOf(args[1])) & laneMask(n));
+        case Opcode::Kandn: return maskValue((~maskBitsOf(args[0]) & maskBitsOf(args[1])) & laneMask(n));
+        case Opcode::Kxnor: return maskValue(~(maskBitsOf(args[0]) ^ maskBitsOf(args[1])) & laneMask(n));
+        case Opcode::Kadd: return maskValue((maskBitsOf(args[0]) + maskBitsOf(args[1])) & laneMask(n));
+        case Opcode::Kshiftl: {
+            Int128 k = args[1].asInt128();
+            if (k < 0 || static_cast<size_t>(k) > n) throw RuntimeError("mask shift out of range");
+            return maskValue((maskBitsOf(args[0]) << static_cast<size_t>(k)) & laneMask(n));
+        }
+        case Opcode::Kshiftr: {
+            Int128 k = args[1].asInt128();
+            if (k < 0 || static_cast<size_t>(k) > n) throw RuntimeError("mask shift out of range");
+            return maskValue((maskBitsOf(args[0]) & laneMask(n)) >> static_cast<size_t>(k));
+        }
+        case Opcode::Ktest:
+            return Value::fromInt128(Type::I32, (maskBitsOf(args[0]) & maskBitsOf(args[1]) & laneMask(n)) != 0 ? 1 : 0);
+        case Opcode::Kortest:
+            return Value::fromInt128(Type::I32, ((maskBitsOf(args[0]) | maskBitsOf(args[1])) & laneMask(n)) != 0 ? 1 : 0);
+        case Opcode::Kunpack: {
+            UInt128 lo = maskBitsOf(args[0]) & laneMask(n / 2);
+            UInt128 hi = maskBitsOf(args[1]) & laneMask(n / 2);
+            return maskValue(lo | (hi << (n / 2)));
+        }
+        case Opcode::Kcvtmask: {
+            UInt128 m = 0;
+            for (size_t i = 0; i < n; ++i) {
+                if (laneUnsigned(vectorGetLane(args[0], lane, i), lane) != 0) m |= static_cast<UInt128>(1) << i;
+            }
+            return maskValue(m);
+        }
+        case Opcode::Kcount: {
+            UInt128 m = maskBitsOf(args[0]) & laneMask(n);
+            int c = 0;
+            for (size_t i = 0; i < n; ++i) {
+                if ((m >> i) & 1) ++c;
+            }
+            return Value::fromInt128(Type::I32, c);
+        }
+        case Opcode::Kfirst:
+        case Opcode::Klast: {
+            UInt128 m = maskBitsOf(args[0]) & laneMask(n);
+            Int128 r = -1;
+            for (size_t i = 0; i < n; ++i) {
+                if ((m >> i) & 1) {
+                    r = static_cast<Int128>(i);
+                    if (op == Opcode::Kfirst) break;
+                }
+            }
+            return Value::fromInt128(Type::I32, r);
+        }
+        case Opcode::Kvalid:
+            return Value::fromInt128(Type::I32, (maskBitsOf(args[0]) & ~laneMask(n)) == 0 ? 1 : 0);
+        default:
+            break;
+    }
+
+    switch (op) {
+        case Opcode::VLohalf: return halfVector(args[0], lane, n, 0);
+        case Opcode::VHihalf: return halfVector(args[0], lane, n, 1);
+        case Opcode::VSwaphalves: {
+            size_t h = n / 2;
+            for (size_t i = 0; i < h; ++i) {
+                vectorSetLane(out, lane, i, vectorGetLane(args[0], lane, h + i));
+                vectorSetLane(out, lane, h + i, vectorGetLane(args[0], lane, i));
+            }
+            return out;
+        }
+        case Opcode::VCombine: {
+            if (argCount < 2) throw RuntimeError("vcombine requires two vectors");
+            size_t h = n / 2;
+            for (size_t i = 0; i < h; ++i) {
+                vectorSetLane(out, lane, i, vectorGetLane(args[0], lane, i));
+                vectorSetLane(out, lane, h + i, vectorGetLane(args[1], lane, i));
+            }
+            return out;
+        }
+        case Opcode::VExtract128: {
+            if (argCount < 2) throw RuntimeError("vextract128 requires an index");
+            Int128 k = args[1].asInt128();
+            size_t per = 16 / sizeOfType(lane);
+            if (k < 0 || static_cast<size_t>(k) * per >= n) throw RuntimeError("128-bit lane index out of range");
+            Value r;
+            r.type = Type::V128;
+            for (size_t i = 0; i < per; ++i) {
+                vectorSetLane(r, lane, i, vectorGetLane(args[0], lane, static_cast<size_t>(k) * per + i));
+            }
+            return r;
+        }
+        case Opcode::VInsert128: {
+            if (argCount < 3) throw RuntimeError("vinsert128 requires an index and a v128");
+            Int128 k = args[1].asInt128();
+            size_t per = 16 / sizeOfType(lane);
+            if (k < 0 || static_cast<size_t>(k) * per >= n) throw RuntimeError("128-bit lane index out of range");
+            out = args[0];
+            out.type = width;
+            for (size_t i = 0; i < per; ++i) {
+                vectorSetLane(out, lane, static_cast<size_t>(k) * per + i, vectorGetLane(args[2], lane, i));
+            }
+            return out;
+        }
+        case Opcode::VBroadcast128: {
+            size_t per = 16 / sizeOfType(lane);
+            for (size_t i = 0; i < n; ++i) vectorSetLane(out, lane, i, vectorGetLane(args[0], lane, i % per));
+            return out;
+        }
+        case Opcode::VPerm128: {
+            if (argCount < 2) throw RuntimeError("vperm128 requires a selector");
+            size_t per = 16 / sizeOfType(lane);
+            size_t groups = n / per;
+            Int128 sel = args[1].asInt128();
+            for (size_t g = 0; g < groups; ++g) {
+                size_t src = static_cast<size_t>((sel >> (g * 4)) & 0xF);
+                if (src >= groups) src = groups - 1;
+                for (size_t i = 0; i < per; ++i) {
+                    vectorSetLane(out, lane, g * per + i, vectorGetLane(args[0], lane, src * per + i));
+                }
+            }
+            return out;
+        }
+        case Opcode::VPermvar:
+        case Opcode::VPermi64:
+        case Opcode::VPermi32:
+        case Opcode::VPermb:
+        case Opcode::VPermw: {
+            if (argCount < 2) throw RuntimeError("permute requires an index vector");
+            for (size_t i = 0; i < n; ++i) {
+                Int128 k = vectorGetLane(args[1], lane, i).asInt128();
+                size_t kk = static_cast<size_t>(k) % n;
+                vectorSetLane(out, lane, i, vectorGetLane(args[0], lane, kk));
+            }
+            return out;
+        }
+        case Opcode::VShlv:
+        case Opcode::VShrv:
+        case Opcode::VSarv:
+        case Opcode::VRotlv:
+        case Opcode::VRotrv: {
+            if (argCount < 2) throw RuntimeError("variable shift requires a shift vector");
+            for (size_t i = 0; i < n; ++i) {
+                UInt128 x = laneUnsigned(vectorGetLane(args[0], lane, i), lane);
+                Int128 sx = vectorGetLane(args[0], lane, i).asInt128();
+                Int128 k = vectorGetLane(args[1], lane, i).asInt128();
+                if (k < 0 || static_cast<size_t>(k) >= bits) throw RuntimeError("vector shift amount out of range");
+                size_t sft = static_cast<size_t>(k);
+                UInt128 r;
+                if (op == Opcode::VShlv) r = (x << sft) & laneMask(bits);
+                else if (op == Opcode::VShrv) r = x >> sft;
+                else if (op == Opcode::VSarv) r = static_cast<UInt128>(sx >> static_cast<int>(sft));
+                else if (sft == 0) r = x;
+                else if (op == Opcode::VRotlv) r = ((x << sft) | (x >> (bits - sft))) & laneMask(bits);
+                else r = ((x >> sft) | (x << (bits - sft))) & laneMask(bits);
+                vectorSetLane(out, lane, i, laneFromInt(lane, static_cast<Int128>(r)));
+            }
+            return out;
+        }
+        case Opcode::VAlign:
+        case Opcode::VAlignd:
+        case Opcode::VAlignq: {
+            if (argCount < 3) throw RuntimeError("valign requires two vectors and a count");
+            Int128 k = args[2].asInt128();
+            for (size_t i = 0; i < n; ++i) {
+                size_t idx = static_cast<size_t>((static_cast<Int128>(i) + k) % static_cast<Int128>(2 * n));
+                vectorSetLane(out, lane, i,
+                              idx < n ? vectorGetLane(args[0], lane, idx) : vectorGetLane(args[1], lane, idx - n));
+            }
+            return out;
+        }
+        case Opcode::VCompress:
+        case Opcode::VCompressk: {
+            if (argCount < 2) throw RuntimeError("vcompress requires a mask");
+            size_t k = 0;
+            for (size_t i = 0; i < n; ++i) {
+                if (maskBit(args[1], i)) vectorSetLane(out, lane, k++, vectorGetLane(args[0], lane, i));
+            }
+            return out;
+        }
+        case Opcode::VExpand:
+        case Opcode::VExpandk: {
+            if (argCount < 2) throw RuntimeError("vexpand requires a mask");
+            size_t k = 0;
+            for (size_t i = 0; i < n; ++i) {
+                if (maskBit(args[1], i)) vectorSetLane(out, lane, i, vectorGetLane(args[0], lane, k++));
+            }
+            return out;
+        }
+        case Opcode::VConflict:
+        case Opcode::VConflictd:
+        case Opcode::VConflictq: {
+            for (size_t i = 0; i < n; ++i) {
+                Int128 m = 0;
+                Int128 vi = vectorGetLane(args[0], lane, i).asInt128();
+                for (size_t j = 0; j < i; ++j) {
+                    if (vectorGetLane(args[0], lane, j).asInt128() == vi) m |= static_cast<Int128>(1) << j;
+                }
+                vectorSetLane(out, lane, i, laneFromInt(lane, m));
+            }
+            return out;
+        }
+        case Opcode::VMulwide:
+        case Opcode::VMaddwide: {
+            if (argCount < 2) throw RuntimeError("this instruction requires two vectors");
+            for (size_t i = 0; i < n; ++i) {
+                Int128 a = vectorGetLane(args[0], lane, i).asInt128();
+                Int128 b = vectorGetLane(args[1], lane, i).asInt128();
+                Int128 r = a * b;
+                if (op == Opcode::VMaddwide && argCount >= 3) r += vectorGetLane(args[2], lane, i).asInt128();
+                vectorSetLane(out, lane, i, laneFromInt(lane, r));
+            }
+            return out;
+        }
+        case Opcode::VDpbusd:
+        case Opcode::VDpwssd: {
+            if (argCount < 2) throw RuntimeError("this instruction requires two vectors");
+            for (size_t i = 0; i < n; ++i) {
+                Int128 acc = (argCount >= 3) ? vectorGetLane(args[2], lane, i).asInt128() : 0;
+                acc += vectorGetLane(args[0], lane, i).asInt128() * vectorGetLane(args[1], lane, i).asInt128();
+                vectorSetLane(out, lane, i, laneFromInt(lane, acc));
+            }
+            return out;
+        }
+        case Opcode::VSad:
+        case Opcode::VMpsad: {
+            if (argCount < 2) throw RuntimeError("this instruction requires two vectors");
+            Int128 acc = 0;
+            for (size_t i = 0; i < n; ++i) {
+                Int128 a = vectorGetLane(args[0], lane, i).asInt128();
+                Int128 b = vectorGetLane(args[1], lane, i).asInt128();
+                acc += a > b ? a - b : b - a;
+            }
+            vectorSetLane(out, lane, 0, laneFromInt(lane, acc));
+            return out;
+        }
+        case Opcode::VReduce2:
+        case Opcode::VReduce4: {
+            size_t group = (op == Opcode::VReduce2) ? 2 : 4;
+            for (size_t i = 0; i + group <= n; i += group) {
+                if (isFloatLane(lane)) {
+                    double acc = 0;
+                    for (size_t j = 0; j < group; ++j) acc += vectorGetLane(args[0], lane, i + j).asDouble();
+                    vectorSetLane(out, lane, i / group, laneFromDouble(lane, acc));
+                } else {
+                    Int128 acc = 0;
+                    for (size_t j = 0; j < group; ++j) acc += vectorGetLane(args[0], lane, i + j).asInt128();
+                    vectorSetLane(out, lane, i / group, laneFromInt(lane, acc));
+                }
+            }
+            return out;
+        }
+        case Opcode::VTernlog:
+        case Opcode::VTernlogq:
+        case Opcode::VTernlogd: {
+            if (argCount < 4) throw RuntimeError("vternlog requires three vectors and an immediate");
+            UInt128 imm = static_cast<UInt128>(args[3].asInt128()) & 0xFF;
+            for (size_t i = 0; i < n; ++i) {
+                UInt128 a = laneUnsigned(vectorGetLane(args[0], lane, i), lane);
+                UInt128 b = laneUnsigned(vectorGetLane(args[1], lane, i), lane);
+                UInt128 c = laneUnsigned(vectorGetLane(args[2], lane, i), lane);
+                UInt128 r = 0;
+                for (size_t bit = 0; bit < bits; ++bit) {
+                    unsigned idx = static_cast<unsigned>((((a >> bit) & 1) << 2) | (((b >> bit) & 1) << 1) |
+                                                          ((c >> bit) & 1));
+                    if ((imm >> idx) & 1) r |= static_cast<UInt128>(1) << bit;
+                }
+                vectorSetLane(out, lane, i, laneFromInt(lane, static_cast<Int128>(r)));
+            }
+            return out;
+        }
+        case Opcode::VSignselect:
+        case Opcode::VBlendlane: {
+            if (argCount < 3) throw RuntimeError("this instruction requires three vectors");
+            for (size_t i = 0; i < n; ++i) {
+                bool take = laneSignBit(vectorGetLane(args[2], lane, i), lane);
+                vectorSetLane(out, lane, i, vectorGetLane(args[take ? 1 : 0], lane, i));
+            }
+            return out;
+        }
+        case Opcode::VLzcntv:
+        case Opcode::VLzcntd:
+        case Opcode::VLzcntq:
+            for (size_t i = 0; i < n; ++i) {
+                vectorSetLane(out, lane, i, laneUnary(Opcode::VClz, lane, vectorGetLane(args[0], lane, i)));
+            }
+            return out;
+        case Opcode::VPopcntv:
+        case Opcode::VPopcntd:
+        case Opcode::VPopcntq:
+        case Opcode::VPopcntb:
+        case Opcode::VPopcntw:
+            for (size_t i = 0; i < n; ++i) {
+                vectorSetLane(out, lane, i, laneUnary(Opcode::VPopcount, lane, vectorGetLane(args[0], lane, i)));
+            }
+            return out;
+        case Opcode::VInterleave128:
+        case Opcode::VDeinterleave128: {
+            if (argCount < 2) throw RuntimeError("this instruction requires two vectors");
+            size_t per = 16 / sizeOfType(lane);
+            for (size_t i = 0; i < n; ++i) {
+                size_t g = i / per;
+                size_t k = i % per;
+                const Value& src = (g % 2 == 0) ? args[0] : args[1];
+                vectorSetLane(out, lane, i, vectorGetLane(src, lane, (g / 2) * per + k));
+            }
+            return out;
+        }
+        case Opcode::VGetexp:
+        case Opcode::VGetexppd: {
+            for (size_t i = 0; i < n; ++i) {
+                double d = vectorGetLane(args[0], lane, i).asDouble();
+                int e = 0;
+                std::frexp(d, &e);
+                vectorSetLane(out, lane, i, laneFromDouble(lane, static_cast<double>(e - 1)));
+            }
+            return out;
+        }
+        case Opcode::VGetmant:
+        case Opcode::VGetmantpd: {
+            for (size_t i = 0; i < n; ++i) {
+                double d = vectorGetLane(args[0], lane, i).asDouble();
+                int e = 0;
+                vectorSetLane(out, lane, i, laneFromDouble(lane, std::frexp(d, &e)));
+            }
+            return out;
+        }
+        case Opcode::VScalef:
+        case Opcode::VScalefpd:
+        case Opcode::VScalefps: {
+            if (argCount < 2) throw RuntimeError("vscalef requires two vectors");
+            for (size_t i = 0; i < n; ++i) {
+                double d = vectorGetLane(args[0], lane, i).asDouble();
+                int e = static_cast<int>(vectorGetLane(args[1], lane, i).asInt128());
+                vectorSetLane(out, lane, i, laneFromDouble(lane, std::ldexp(d, e)));
+            }
+            return out;
+        }
+        case Opcode::VRange:
+        case Opcode::VRangepd:
+        case Opcode::VRangeps:
+        case Opcode::VFixup: {
+            if (argCount < 2) throw RuntimeError("this instruction requires two vectors");
+            for (size_t i = 0; i < n; ++i) {
+                double a = vectorGetLane(args[0], lane, i).asDouble();
+                double b = vectorGetLane(args[1], lane, i).asDouble();
+                vectorSetLane(out, lane, i, laneFromDouble(lane, a < b ? a : b));
+            }
+            return out;
+        }
+        case Opcode::VReducepd:
+        case Opcode::VReduceps: {
+            for (size_t i = 0; i < n; ++i) {
+                double d = vectorGetLane(args[0], lane, i).asDouble();
+                vectorSetLane(out, lane, i, laneFromDouble(lane, d - std::floor(d)));
+            }
+            return out;
+        }
+        case Opcode::VCvtpd2ps:
+        case Opcode::VCvtps2pd:
+        case Opcode::VCvtdq2pd:
+        case Opcode::VCvtdq2ps: {
+            for (size_t i = 0; i < n; ++i) {
+                vectorSetLane(out, lane, i, laneFromDouble(lane, vectorGetLane(args[0], lane, i).asDouble()));
+            }
+            return out;
+        }
+        case Opcode::VCvtpd2dq:
+        case Opcode::VCvtps2dq: {
+            for (size_t i = 0; i < n; ++i) {
+                vectorSetLane(out, lane, i,
+                              laneFromInt(lane, static_cast<Int128>(vectorGetLane(args[0], lane, i).asDouble())));
+            }
+            return out;
+        }
+        case Opcode::VWiden256:
+        case Opcode::VNarrow256: {
+            for (size_t i = 0; i < n; ++i) {
+                size_t src = (op == Opcode::VWiden256) ? i / 2 : (i * 2 < n ? i * 2 : n - 1);
+                vectorSetLane(out, lane, i, vectorGetLane(args[0], lane, src));
+            }
+            return out;
+        }
+        case Opcode::VShufi64:
+        case Opcode::VShufi32: {
+            if (argCount < 3) throw RuntimeError("this instruction requires two vectors and a selector");
+            Int128 sel = args[2].asInt128();
+            for (size_t i = 0; i < n; ++i) {
+                size_t k = static_cast<size_t>((sel >> (i * 2)) & 0x3) % n;
+                vectorSetLane(out, lane, i,
+                              (i < n / 2) ? vectorGetLane(args[0], lane, k) : vectorGetLane(args[1], lane, k));
+            }
+            return out;
+        }
+        default:
+            break;
+    }
+
+    throw RuntimeError(std::string("vector opcode not implemented: ") + opcodeName(op));
+}
+
+Value vectorComputeMasked(Opcode::Value op, Type::Value width, Type::Value lane, const Value* args,
+                          std::size_t argCount, bool zeroing) {
+    size_t n = vectorLaneCount(width, lane);
+    if (argCount < 2) throw RuntimeError(std::string(opcodeName(op)) + " requires a mask and operands");
+    const Value& mask = args[0];
+    Value out;
+    out.type = width;
+    if (!zeroing && argCount >= 2) {
+        out = args[1];
+        out.type = width;
+    }
+    for (size_t i = 0; i < n; ++i) {
+        if (!maskBit(mask, i)) {
+            if (zeroing) vectorSetLane(out, lane, i, allZero(lane));
+            continue;
+        }
+        Value lanes[3];
+        size_t k = 0;
+        for (size_t a = 1; a < argCount && k < 3; ++a, ++k) lanes[k] = vectorGetLane(args[a], lane, i);
+        Value r;
+        if (k >= 3) {
+            double x = lanes[0].asDouble(), y = lanes[1].asDouble(), z = lanes[2].asDouble();
+            r = isFloatLane(lane) ? laneFromDouble(lane, x * y + z)
+                                   : laneFromInt(lane, lanes[0].asInt128() * lanes[1].asInt128() + lanes[2].asInt128());
+        } else if (k == 2) {
+            r = laneBinary(op, lane, lanes[0], lanes[1]);
+        } else {
+            r = laneUnary(op, lane, lanes[0]);
+        }
+        vectorSetLane(out, lane, i, r);
+    }
+    return out;
 }
 
 Value vectorCompute(Opcode::Value op, Type::Value width, Type::Value lane, const Value* args, std::size_t argCount) {

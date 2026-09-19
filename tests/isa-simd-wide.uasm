@@ -1,0 +1,423 @@
+module isa_simdwide
+
+export func main() -> i32 {
+chk1:
+    viota.v256.i32 r0
+    mov.i32 r8, 5
+    vextract.v256.i32 r9, r0, r8
+    mov.i32 r60, 5
+    cmp.i32 r9, r60
+    bne bad1
+    jmp chk2
+bad1:
+    mov.i32 r61, 1
+    ret.i32 r61
+chk2:
+    viota.v256.i32 r0
+    vlohalf.v256.i32 r1, r0
+    mov.i32 r8, 3
+    vextract.v128.i32 r9, r1, r8
+    mov.i32 r60, 3
+    cmp.i32 r9, r60
+    bne bad2
+    jmp chk3
+bad2:
+    mov.i32 r61, 2
+    ret.i32 r61
+chk3:
+    viota.v256.i32 r0
+    vhihalf.v256.i32 r1, r0
+    mov.i32 r8, 0
+    vextract.v128.i32 r9, r1, r8
+    mov.i32 r60, 4
+    cmp.i32 r9, r60
+    bne bad3
+    jmp chk4
+bad3:
+    mov.i32 r61, 3
+    ret.i32 r61
+chk4:
+    viota.v256.i32 r0
+    vswaphalves.v256.i32 r1, r0
+    mov.i32 r8, 0
+    vextract.v256.i32 r9, r1, r8
+    mov.i32 r60, 4
+    cmp.i32 r9, r60
+    bne bad4
+    jmp chk5
+bad4:
+    mov.i32 r61, 4
+    ret.i32 r61
+chk5:
+    viota.v256.i32 r0
+    mov.i32 r5, 1
+    vextract128.v256.i32 r1, r0, r5
+    mov.i32 r8, 1
+    vextract.v128.i32 r9, r1, r8
+    mov.i32 r60, 5
+    cmp.i32 r9, r60
+    bne bad5
+    jmp chk6
+bad5:
+    mov.i32 r61, 5
+    ret.i32 r61
+chk6:
+    viota.v256.i32 r0
+    vreverse.v256.i32 r1, r0
+    vcombine.v256.i32 r2, r0, r1
+    mov.i32 r8, 4
+    vextract.v256.i32 r9, r2, r8
+    mov.i32 r60, 7
+    cmp.i32 r9, r60
+    bne bad6
+    jmp chk7
+bad6:
+    mov.i32 r61, 6
+    ret.i32 r61
+chk7:
+    viota.v256.i32 r0
+    viota.v256.i32 r1
+    vreverse.v256.i32 r2, r1
+    vpermvar.v256.i32 r3, r0, r2
+    mov.i32 r8, 0
+    vextract.v256.i32 r9, r3, r8
+    mov.i32 r60, 7
+    cmp.i32 r9, r60
+    bne bad7
+    jmp chk8
+bad7:
+    mov.i32 r61, 7
+    ret.i32 r61
+chk8:
+    viota.v256.i32 r0
+    viota.v256.i32 r1
+    vshlv.v256.i32 r2, r0, r1
+    mov.i32 r8, 3
+    vextract.v256.i32 r9, r2, r8
+    mov.i32 r60, 24
+    cmp.i32 r9, r60
+    bne bad8
+    jmp chk9
+bad8:
+    mov.i32 r61, 8
+    ret.i32 r61
+chk9:
+    viota.v256.i32 r0
+    viota.v256.i32 r1
+    vmulwide.v256.i32 r2, r0, r1
+    mov.i32 r8, 4
+    vextract.v256.i32 r9, r2, r8
+    mov.i32 r60, 16
+    cmp.i32 r9, r60
+    bne bad9
+    jmp chk10
+bad9:
+    mov.i32 r61, 9
+    ret.i32 r61
+chk10:
+    viota.v256.i32 r0
+    vreduce2.v256.i32 r1, r0
+    mov.i32 r8, 0
+    vextract.v256.i32 r9, r1, r8
+    mov.i32 r60, 1
+    cmp.i32 r9, r60
+    bne bad10
+    jmp chk11
+bad10:
+    mov.i32 r61, 10
+    ret.i32 r61
+chk11:
+    viota.v256.i32 r0
+    vreduce4.v256.i32 r1, r0
+    mov.i32 r8, 0
+    vextract.v256.i32 r9, r1, r8
+    mov.i32 r60, 6
+    cmp.i32 r9, r60
+    bne bad11
+    jmp chk12
+bad11:
+    mov.i32 r61, 11
+    ret.i32 r61
+chk12:
+    viota.v256.i32 r0
+    vlzcntv.v256.i32 r1, r0
+    mov.i32 r8, 1
+    vextract.v256.i32 r9, r1, r8
+    mov.i32 r60, 31
+    cmp.i32 r9, r60
+    bne bad12
+    jmp chk13
+bad12:
+    mov.i32 r61, 12
+    ret.i32 r61
+chk13:
+    viota.v256.i32 r0
+    mov.i32 r5, 255
+    vsplat.v256.i32 r6, r5
+    vpopcntv.v256.i32 r1, r6
+    mov.i32 r8, 0
+    vextract.v256.i32 r9, r1, r8
+    mov.i32 r60, 8
+    cmp.i32 r9, r60
+    bne bad13
+    jmp chk14
+bad13:
+    mov.i32 r61, 13
+    ret.i32 r61
+chk14:
+    viota.v256.i32 r0
+    vones.v256.i32 r1
+    mov.i32 r5, 136
+    vternlog.v256.i32 r2, r0, r1, r0, r5
+    mov.i32 r8, 3
+    vextract.v256.i32 r9, r2, r8
+    mov.i32 r60, 3
+    cmp.i32 r9, r60
+    bne bad14
+    jmp chk15
+bad14:
+    mov.i32 r61, 14
+    ret.i32 r61
+chk15:
+    mov.i32 r0, 15
+    kmov.v128.i32 r1, r0
+    kcount.v128.i32 r9, r1
+    mov.i32 r60, 4
+    cmp.i32 r9, r60
+    bne bad15
+    jmp chk16
+bad15:
+    mov.i32 r61, 15
+    ret.i32 r61
+chk16:
+    mov.i32 r0, 15
+    mov.i32 r1, 9
+    kand.v128.i32 r2, r0, r1
+    kcount.v128.i32 r9, r2
+    mov.i32 r60, 2
+    cmp.i32 r9, r60
+    bne bad16
+    jmp chk17
+bad16:
+    mov.i32 r61, 16
+    ret.i32 r61
+chk17:
+    mov.i32 r0, 5
+    mov.i32 r1, 10
+    kor.v128.i32 r2, r0, r1
+    kcount.v128.i32 r9, r2
+    mov.i32 r60, 4
+    cmp.i32 r9, r60
+    bne bad17
+    jmp chk18
+bad17:
+    mov.i32 r61, 17
+    ret.i32 r61
+chk18:
+    mov.i32 r0, 0
+    knot.v128.i32 r2, r0
+    kcount.v128.i32 r9, r2
+    mov.i32 r60, 4
+    cmp.i32 r9, r60
+    bne bad18
+    jmp chk19
+bad18:
+    mov.i32 r61, 18
+    ret.i32 r61
+chk19:
+    kset.v128.i32 r2
+    kcount.v128.i32 r9, r2
+    mov.i32 r60, 4
+    cmp.i32 r9, r60
+    bne bad19
+    jmp chk20
+bad19:
+    mov.i32 r61, 19
+    ret.i32 r61
+chk20:
+    kclr.v128.i32 r2
+    kcount.v128.i32 r9, r2
+    mov.i32 r60, 0
+    cmp.i32 r9, r60
+    bne bad20
+    jmp chk21
+bad20:
+    mov.i32 r61, 20
+    ret.i32 r61
+chk21:
+    mov.i32 r0, 6
+    kfirst.v128.i32 r9, r0
+    mov.i32 r60, 1
+    cmp.i32 r9, r60
+    bne bad21
+    jmp chk22
+bad21:
+    mov.i32 r61, 21
+    ret.i32 r61
+chk22:
+    mov.i32 r0, 6
+    klast.v128.i32 r9, r0
+    mov.i32 r60, 2
+    cmp.i32 r9, r60
+    bne bad22
+    jmp chk23
+bad22:
+    mov.i32 r61, 22
+    ret.i32 r61
+chk23:
+    mov.i32 r0, 12
+    mov.i32 r1, 3
+    ktest.v128.i32 r9, r0, r1
+    mov.i32 r60, 0
+    cmp.i32 r9, r60
+    bne bad23
+    jmp chk24
+bad23:
+    mov.i32 r61, 23
+    ret.i32 r61
+chk24:
+    viota.v128.i32 r0
+    mov.i32 r5, 1
+    vsplat.v128.i32 r6, r5
+    vcmpge.v128.i32 r7, r0, r6
+    kcvtmask.v128.i32 r9, r7
+    mov.i32 r60, 14
+    cmp.i32 r9, r60
+    bne bad24
+    jmp chk25
+bad24:
+    mov.i32 r61, 24
+    ret.i32 r61
+chk25:
+    mov.i32 r0, 5
+    viota.v128.i32 r1
+    mov.i32 r2, 10
+    vsplat.v128.i32 r3, r2
+    vaddz.v128.i32 r4, r0, r1, r3
+    mov.i32 r8, 0
+    vextract.v128.i32 r9, r4, r8
+    mov.i32 r60, 10
+    cmp.i32 r9, r60
+    bne bad25
+    jmp chk26
+bad25:
+    mov.i32 r61, 25
+    ret.i32 r61
+chk26:
+    mov.i32 r0, 5
+    viota.v128.i32 r1
+    mov.i32 r2, 10
+    vsplat.v128.i32 r3, r2
+    vaddz.v128.i32 r4, r0, r1, r3
+    mov.i32 r8, 1
+    vextract.v128.i32 r9, r4, r8
+    mov.i32 r60, 0
+    cmp.i32 r9, r60
+    bne bad26
+    jmp chk27
+bad26:
+    mov.i32 r61, 26
+    ret.i32 r61
+chk27:
+    mov.i32 r0, 5
+    viota.v128.i32 r1
+    mov.i32 r2, 10
+    vsplat.v128.i32 r3, r2
+    vaddz.v128.i32 r4, r0, r1, r3
+    mov.i32 r8, 2
+    vextract.v128.i32 r9, r4, r8
+    mov.i32 r60, 12
+    cmp.i32 r9, r60
+    bne bad27
+    jmp chk28
+bad27:
+    mov.i32 r61, 27
+    ret.i32 r61
+chk28:
+    mov.i32 r0, 5
+    viota.v128.i32 r1
+    mov.i32 r2, 10
+    vsplat.v128.i32 r3, r2
+    vaddk.v128.i32 r4, r0, r1, r3
+    mov.i32 r8, 1
+    vextract.v128.i32 r9, r4, r8
+    mov.i32 r60, 1
+    cmp.i32 r9, r60
+    bne bad28
+    jmp chk29
+bad28:
+    mov.i32 r61, 28
+    ret.i32 r61
+chk29:
+    mov.i32 r0, 5
+    viota.v128.i32 r1
+    mov.i32 r2, 10
+    vsplat.v128.i32 r3, r2
+    vmulz.v128.i32 r4, r0, r1, r3
+    mov.i32 r8, 2
+    vextract.v128.i32 r9, r4, r8
+    mov.i32 r60, 20
+    cmp.i32 r9, r60
+    bne bad29
+    jmp chk30
+bad29:
+    mov.i32 r61, 29
+    ret.i32 r61
+chk30:
+    viota.v128.i32 r1
+    mov.i32 r0, 10
+    vcompress.v128.i32 r4, r1, r0
+    mov.i32 r8, 0
+    vextract.v128.i32 r9, r4, r8
+    mov.i32 r60, 1
+    cmp.i32 r9, r60
+    bne bad30
+    jmp chk31
+bad30:
+    mov.i32 r61, 30
+    ret.i32 r61
+chk31:
+    viota.v128.i32 r1
+    mov.i32 r0, 10
+    vcompress.v128.i32 r4, r1, r0
+    mov.i32 r8, 1
+    vextract.v128.i32 r9, r4, r8
+    mov.i32 r60, 3
+    cmp.i32 r9, r60
+    bne bad31
+    jmp chk32
+bad31:
+    mov.i32 r61, 31
+    ret.i32 r61
+chk32:
+    viota.v128.i32 r1
+    mov.i32 r0, 5
+    vexpand.v128.i32 r4, r1, r0
+    mov.i32 r8, 2
+    vextract.v128.i32 r9, r4, r8
+    mov.i32 r60, 1
+    cmp.i32 r9, r60
+    bne bad32
+    jmp chk33
+bad32:
+    mov.i32 r61, 32
+    ret.i32 r61
+chk33:
+    mov.i32 r0, 3
+    viota.v128.i32 r1
+    mov.ptr r2, 7200
+    vstorek.v128.i32 r2, r0, r1
+    vload.v128.i32 r3, r2
+    mov.i32 r8, 1
+    vextract.v128.i32 r9, r3, r8
+    mov.i32 r60, 1
+    cmp.i32 r9, r60
+    bne bad33
+    jmp done
+bad33:
+    mov.i32 r61, 33
+    ret.i32 r61
+done:
+    mov.i32 r61, 0
+    ret.i32 r61
+}

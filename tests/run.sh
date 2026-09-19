@@ -70,6 +70,7 @@ expect 0  isa-core
 expect 0  isa-flow
 expect 0  isa-bits
 expect 0  isa-simd
+expect 0  isa-simd-wide
 expect_jit 42 basics i32:40 i32:2
 expect_jit 1  control-flow i32:10 i32:20
 roundtrip

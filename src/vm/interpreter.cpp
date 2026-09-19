@@ -2384,12 +2384,95 @@ public:
                                                                 ? instr.type
                                                                 : instr.type2));
                             }
-                            Value r = vectorCompute(instr.opcode, instr.type, instr.type2,
-                                                    vargs.empty() ? 0 : &vargs[0], vargs.size());
+                            const Value* ap = vargs.empty() ? 0 : &vargs[0];
+                            Opcode::Value baseOp = instr.opcode;
+                            int maskKind = vectorMaskedBase(instr.opcode, baseOp);
+                            Value r;
+                            if (maskKind == 2) {
+                                r = vectorCompute(baseOp, instr.type, instr.type2, ap, vargs.size());
+                            } else if (maskKind >= 0) {
+                                r = vectorComputeMasked(baseOp, instr.type, instr.type2, ap, vargs.size(),
+                                                        maskKind == 1);
+                            } else if (vectorOpIsWide(instr.opcode)) {
+                                r = vectorComputeWide(instr.opcode, instr.type, instr.type2, ap, vargs.size());
+                            } else {
+                                r = vectorCompute(instr.opcode, instr.type, instr.type2, ap, vargs.size());
+                            }
                             if (instr.hasDest) frame.reg(instr.dest) = r;
                             break;
                         }
                         switch (instr.opcode) {
+                    case Opcode::VLoadk:
+                    case Opcode::VLoadz:
+                    case Opcode::VExpandload: {
+                        uint64_t addr = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        Value mask = readOperand(frame, instr.operands[1], Type::I64);
+                        size_t n = vectorLaneCount(instr.type, instr.type2);
+                        size_t ls = sizeOfType(instr.type2);
+                        Value v;
+                        v.type = instr.type;
+                        size_t src = 0;
+                        for (size_t i = 0; i < n; ++i) {
+                            if (((static_cast<UInt128>(mask.asInt128()) >> i) & 1) == 0) continue;
+                            size_t slot = (instr.opcode == Opcode::VExpandload) ? src++ : i;
+                            uint64_t a = addr + slot * ls;
+                            checkRange(a, ls);
+                            Value lane;
+                            lane.type = instr.type2;
+                            std::memcpy(&lane.bits, &memory_[0] + a, ls);
+                            vectorSetLane(v, instr.type2, i, lane);
+                        }
+                        frame.reg(instr.dest) = v;
+                        break;
+                    }
+                    case Opcode::VStorek:
+                    case Opcode::VCompressstore: {
+                        uint64_t addr = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        Value mask = readOperand(frame, instr.operands[1], Type::I64);
+                        Value src = readOperand(frame, instr.operands[2], instr.type);
+                        size_t n = vectorLaneCount(instr.type, instr.type2);
+                        size_t ls = sizeOfType(instr.type2);
+                        size_t slot = 0;
+                        for (size_t i = 0; i < n; ++i) {
+                            if (((static_cast<UInt128>(mask.asInt128()) >> i) & 1) == 0) continue;
+                            size_t at = (instr.opcode == Opcode::VCompressstore) ? slot++ : i;
+                            uint64_t a = addr + at * ls;
+                            checkRange(a, ls);
+                            Value lane = vectorGetLane(src, instr.type2, i);
+                            std::memcpy(&memory_[0] + a, &lane.bits, ls);
+                        }
+                        break;
+                    }
+                    case Opcode::VGatherk:
+                    case Opcode::VScatterk: {
+                        uint64_t base = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;
+                        Value mask = readOperand(frame, instr.operands[1], Type::I64);
+                        Value idx = readOperand(frame, instr.operands[2], instr.type);
+                        size_t n = vectorLaneCount(instr.type, instr.type2);
+                        size_t ls = sizeOfType(instr.type2);
+                        bool store = instr.opcode == Opcode::VScatterk;
+                        Value src;
+                        if (store) src = readOperand(frame, instr.operands[3], instr.type);
+                        Value v;
+                        v.type = instr.type;
+                        for (size_t i = 0; i < n; ++i) {
+                            if (((static_cast<UInt128>(mask.asInt128()) >> i) & 1) == 0) continue;
+                            Int128 k = vectorGetLane(idx, instr.type2, i).asInt128();
+                            uint64_t a = base + static_cast<uint64_t>(k) * ls;
+                            checkRange(a, ls);
+                            if (store) {
+                                Value lane = vectorGetLane(src, instr.type2, i);
+                                std::memcpy(&memory_[0] + a, &lane.bits, ls);
+                            } else {
+                                Value lane;
+                                lane.type = instr.type2;
+                                std::memcpy(&lane.bits, &memory_[0] + a, ls);
+                                vectorSetLane(v, instr.type2, i, lane);
+                            }
+                        }
+                        if (!store) frame.reg(instr.dest) = v;
+                        break;
+                    }
                     case Opcode::VLoad:
                     case Opcode::VLoadu: {
                         uint64_t addr = readOperand(frame, instr.operands[0], Type::Ptr).bits.ptr;

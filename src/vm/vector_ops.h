@@ -17,4 +17,14 @@ bool vectorOpIsMemory(Opcode::Value op);
 
 Value vectorCompute(Opcode::Value op, Type::Value width, Type::Value lane, const Value* args, std::size_t argCount);
 
+Value vectorComputeWide(Opcode::Value op, Type::Value width, Type::Value lane, const Value* args,
+                        std::size_t argCount);
+
+Value vectorComputeMasked(Opcode::Value op, Type::Value width, Type::Value lane, const Value* args,
+                          std::size_t argCount, bool zeroing);
+
+bool vectorOpIsWide(Opcode::Value op);
+
+int vectorMaskedBase(Opcode::Value op, Opcode::Value& baseOp);
+
 }
